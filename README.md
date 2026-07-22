@@ -74,15 +74,15 @@ Docker: `docker compose up` (API :8020, UI :5173). Live Redis profile: `docker c
 
 ## Screenshots
 
-![Debrief overview — ◆ collect / ▼ strike timeline, scrollable milestones](docs/screenshots/01-debrief-overview.png)
+![Debrief overview — Mission tab (ops status, no instruments)](docs/screenshots/01-debrief-overview.png)
 
 ![Timeline scrub mid-mission with track replay](docs/screenshots/02-timeline-scrub.png)
 
-![Strike EXECUTED — instruments, bay open, tasks, timeline highlight](docs/screenshots/03-strike-milestone.png)
+![Strike EXECUTED — Mission tab: weapons, tasks, timeline highlight](docs/screenshots/03-strike-milestone.png)
 
-![BDA verified — Mission tab (ops status without instruments)](docs/screenshots/04-bda-and-status.png)
+![Mission tab — waypoint, fuel, payload, weapons, assigned tasks](docs/screenshots/04-mission-tab.png)
 
-![Launch / Recovery — altitude profile, gear/systems, flight instruments](docs/screenshots/05-launch-recovery.png)
+![Launch / Recovery tab — altitude profile, gear/systems, flight instruments](docs/screenshots/05-launch-recovery-tab.png)
 
 Refresh captures (API + Vite running):
 
