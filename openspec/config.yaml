@@ -1,0 +1,5 @@
+schema: spec-driven
+context: |
+  Platform Debrief for o-my OMS ecosystem.
+  Stack: Python FastAPI + Parquet + Svelte 5 + Redis (optional live capture).
+  Follow openspec/WORKFLOW.md: spec → beads → implement → verify.

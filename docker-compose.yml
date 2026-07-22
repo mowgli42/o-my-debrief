@@ -1,0 +1,29 @@
+services:
+  backend:
+    build: .
+    ports:
+      - "8020:8020"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DEBRIEF_DATA_DIR=/app/data/debrief
+    volumes:
+      - .:/app
+    command: uvicorn omy_debrief.api.app:app --host 0.0.0.0 --port 8020 --reload
+
+  frontend:
+    image: node:22-bookworm
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    depends_on:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    profiles:
+      - live
