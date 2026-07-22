@@ -1,3 +1,9 @@
-from .events import DebriefEvent, MissionManifest, Milestone, PlatformState
+from .events import DebriefEvent, Milestone, MissionManifest, PlatformState, TaskStatusEntry
 
-__all__ = ["DebriefEvent", "MissionManifest", "Milestone", "PlatformState"]
+__all__ = [
+    "DebriefEvent",
+    "Milestone",
+    "MissionManifest",
+    "PlatformState",
+    "TaskStatusEntry",
+]

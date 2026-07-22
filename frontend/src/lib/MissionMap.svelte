@@ -6,15 +6,20 @@
   let {
     waypoints = [],
     events = [],
+    track = [],
     platform = null,
+    position = null,
     currentTime = null,
+    highlightEventId = null,
   } = $props()
 
   let mapEl = $state(null)
   let map = null
   let routeLayer = null
+  let trackLayer = null
   let eventLayer = null
   let platformMarker = null
+  let fitted = false
 
   onMount(() => {
     map = L.map(mapEl, {
@@ -28,6 +33,7 @@
     }).addTo(map)
 
     routeLayer = L.layerGroup().addTo(map)
+    trackLayer = L.layerGroup().addTo(map)
     eventLayer = L.layerGroup().addTo(map)
 
     return () => {
@@ -41,7 +47,7 @@
     routeLayer.clearLayers()
     if (!waypoints.length) return
     const latlngs = waypoints.map((w) => [w.lat, w.lon])
-    L.polyline(latlngs, { color: '#3dd6c6', weight: 2, opacity: 0.85, dashArray: '6 4' }).addTo(
+    L.polyline(latlngs, { color: '#3dd6c6', weight: 2, opacity: 0.55, dashArray: '6 4' }).addTo(
       routeLayer,
     )
     waypoints.forEach((w, i) => {
@@ -55,7 +61,26 @@
         .bindTooltip(`${i + 1}. ${w.label}`, { direction: 'top' })
         .addTo(routeLayer)
     })
-    map.fitBounds(L.latLngBounds(latlngs).pad(0.25))
+    if (!fitted) {
+      map.fitBounds(L.latLngBounds(latlngs).pad(0.25))
+      fitted = true
+    }
+  })
+
+  $effect(() => {
+    if (!map || !trackLayer) return
+    trackLayer.clearLayers()
+    if (!track.length) return
+    const t = currentTime ? new Date(currentTime).getTime() : Infinity
+    const past = track.filter((s) => new Date(s.timestamp).getTime() <= t)
+    const latlngs = past.map((s) => [s.lat, s.lon])
+    if (latlngs.length >= 2) {
+      L.polyline(latlngs, {
+        color: '#f0c14a',
+        weight: 3,
+        opacity: 0.9,
+      }).addTo(trackLayer)
+    }
   })
 
   $effect(() => {
@@ -66,22 +91,40 @@
       if (e.lat == null || e.lon == null) continue
       if (!['sensorCollect', 'task', 'bda'].includes(e.event_type)) continue
       const past = new Date(e.timestamp).getTime() <= t
+      const highlighted = highlightEventId && e.event_id === highlightEventId
       const color =
         e.event_type === 'sensorCollect'
           ? sensorColor(e.sensor)
           : e.event_type === 'task'
             ? '#ff7a45'
             : '#5ddea0'
-      L.circleMarker([e.lat, e.lon], {
-        radius: e.event_type === 'task' ? 8 : 6,
-        color,
-        fillColor: color,
-        fillOpacity: past ? 0.85 : 0.25,
-        weight: past ? 2 : 1,
-        opacity: past ? 1 : 0.4,
-      })
-        .bindTooltip(e.summary, { direction: 'top' })
-        .addTo(eventLayer)
+      const opacity = past || highlighted ? 1 : 0.4
+
+      if (e.event_type === 'task' || e.marker === 'caret') {
+        const size = highlighted ? 22 : 18
+        L.marker([e.lat, e.lon], {
+          icon: L.divIcon({
+            className: '',
+            html: `<div style="font-size:${size}px;line-height:1;color:${color};text-shadow:0 0 6px rgba(0,0,0,.9);${highlighted ? 'outline:2px solid #3dd6c6;outline-offset:2px;border-radius:2px;' : ''}">▼</div>`,
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2],
+          }),
+          opacity,
+        })
+          .bindTooltip(e.summary, { direction: 'top' })
+          .addTo(eventLayer)
+      } else {
+        L.circleMarker([e.lat, e.lon], {
+          radius: highlighted ? 9 : e.event_type === 'bda' ? 7 : 6,
+          color: highlighted ? '#3dd6c6' : color,
+          fillColor: color,
+          fillOpacity: past || highlighted ? 0.85 : 0.25,
+          weight: highlighted ? 3 : past ? 2 : 1,
+          opacity,
+        })
+          .bindTooltip(e.summary, { direction: 'top' })
+          .addTo(eventLayer)
+      }
     }
   })
 
@@ -91,13 +134,17 @@
       map.removeLayer(platformMarker)
       platformMarker = null
     }
-    if (platform?.lat != null && platform?.lon != null) {
-      platformMarker = L.marker([platform.lat, platform.lon], {
+    const lat = position?.lat ?? platform?.lat
+    const lon = position?.lon ?? platform?.lon
+    const heading = position?.heading_deg ?? platform?.heading_deg
+    if (lat != null && lon != null) {
+      const rot = heading != null ? `transform:rotate(${heading}deg)` : ''
+      platformMarker = L.marker([lat, lon], {
         icon: L.divIcon({
           className: '',
-          html: `<div style="width:14px;height:14px;border-radius:50%;background:#3dd6c6;border:2px solid #e8eef8;box-shadow:0 0 10px rgba(61,214,198,.8)"></div>`,
-          iconSize: [14, 14],
-          iconAnchor: [7, 7],
+          html: `<div style="width:16px;height:16px;${rot}"><div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:16px solid #3dd6c6;filter:drop-shadow(0 0 6px rgba(61,214,198,.9))"></div></div>`,
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
         }),
       }).addTo(map)
     }

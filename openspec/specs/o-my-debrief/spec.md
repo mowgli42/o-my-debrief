@@ -165,11 +165,18 @@ Follow the established OpenSpec + Gherkin + Beads + Cursor workflow from fuzzy-r
    - Frontend: Svelte 5 + Vite + Tailwind + shadcn-svelte or daisyUI for components. For timeline: custom SVG + pointer events or library like vis-timeline / timelinejs (light) or d3-time. Map: svelte-leaflet or @maplibre + svelte. Icons: lucide-svelte or heroicons. State: Svelte stores + URL for deep linkable time/mission.
    - Shared: OMS message models (perhaps shared lib or copy from o-my if accessible; or define minimal Pydantic subset). Common docker base.
 4. MVP prioritization (per OpenSpec guidance): Get recorder writing parquet from redis (or simulated messages) → API serving /events and /state_at for a demo dataset → Basic Svelte shell with timeline (static markers) + map (static route) + status cards updating on scrub → Wire to live API → Add milestone extraction logic and left panel → Polish symbols, interactions, export, demo data generator.
-5. Later phases: Full track replay from position messages, AI summary of mission (local model on events), integration hooks (e.g. publish debrief artifacts back to o-my or battlespace DB), multi-mission compare, VR/AR extensions? (stretch).
+5. Later phases: Multi-mission compare, VR/AR extensions, production LLM AAR adapter (hook exists on `/api/summary`).
 
-This spec is the source of truth. Scenarios in the companion .feature file provide BDD tests and acceptance criteria. Implementation can proceed immediately with AI coding agents following the beads/openspec patterns.
+### Shipped post-MVP (see change `add-classifier-track-summary`)
 
-**Status**: specified (ready for beads issue breakdown and phased implementation)
+- YAML milestone classifier (`config/milestone-rules.yaml`) with hardcoded fallback + BDA↔strike linkage
+- Track samples + interpolated `/api/position_at` for smooth map replay
+- Rule-based `/api/summary` AAR narrative
+- Recorder OMS XML normalization for o-my-sim `PlatformStatusReport`
+
+This spec is the source of truth. Scenarios in the companion .feature file provide BDD tests and acceptance criteria. Active change deltas: `openspec/changes/add-classifier-track-summary/`.
+
+**Status**: MVP shipped; classifier/track/summary change in progress toward archive
 
 **Related**: o-my (core OMS C2), o-my-sim (message generation for testing), battlespace-manager (potential consumer or extension point), fuzzy-reconciler (reference for OpenSpec/Svelte/FastAPI patterns), Schwerpunkt (for any agentic extensions to milestone detection or summarization).
 

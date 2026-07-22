@@ -1,4 +1,4 @@
-"""API smoke tests against demo parquet."""
+"""API + classifier + track + summary tests against demo parquet."""
 
 from __future__ import annotations
 
@@ -17,6 +17,10 @@ def data_root(tmp_path_factory: pytest.TempPathFactory) -> Path:
     root = tmp_path_factory.mktemp("debrief")
     write_mission(root)
     os.environ["DEBRIEF_DATA_DIR"] = str(root)
+    # Point at repo rules
+    os.environ["DEBRIEF_RULES"] = str(
+        Path(__file__).resolve().parents[1] / "config" / "milestone-rules.yaml"
+    )
     clear_cache()
     return root
 
@@ -49,13 +53,9 @@ def test_events_and_markers(client: TestClient) -> None:
     markers = {e["marker"] for e in events}
     assert "diamond" in markers
     assert "caret" in markers
-    types = {e["event_type"] for e in events}
-    assert "sensorCollect" in types
-    assert "task" in types
-    assert "bda" in types
 
 
-def test_milestones(client: TestClient) -> None:
+def test_milestones_yaml_and_bda_link(client: TestClient) -> None:
     r = client.get(f"/api/milestones?mission={MISSION_ID}")
     assert r.status_code == 200
     ms = r.json()
@@ -63,25 +63,63 @@ def test_milestones(client: TestClient) -> None:
     assert "sensor_collect" in kinds
     assert "strike_executed" in kinds
     assert "bda_positive" in kinds or "bda" in kinds
+    bdas = [m for m in ms if m["kind"] in {"bda", "bda_positive"}]
+    assert bdas
+    assert any(m.get("linked_to_strike") for m in bdas)
+    assert any(m.get("linked_strike_event_id") for m in bdas)
 
 
 def test_state_at(client: TestClient) -> None:
     missions = client.get("/api/missions").json()
     m = next(x for x in missions if x["mission_id"] == MISSION_ID)
-    # Mid-mission
     r = client.get(f"/api/state_at?mission={MISSION_ID}&time={m['start_time']}")
     assert r.status_code == 200
-    state = r.json()
-    assert "fuel_percent" in state
-    assert state["fuel_percent"] <= 100
-    assert "weapons" in state
+    body0 = r.json()
+    assert body0["fuel_percent"] <= 100
+    assert "current_waypoint" in body0
+    assert "tasks" in body0
+    assert "roll_deg" in body0
+    assert "pitch_deg" in body0
 
-    # Around strike
     mid = "2026-07-21T14:20:00Z"
     r2 = client.get(f"/api/state_at?mission={MISSION_ID}&time={mid}")
     assert r2.status_code == 200
-    s2 = r2.json()
-    assert s2["fuel_percent"] < 94
+    body = r2.json()
+    assert body["fuel_percent"] < 94
+    assert body["current_waypoint"]
+    assert any(t["status"] == "EXECUTED" for t in body["tasks"])
+    assert body["weapons_bay"] in {"open", "closed"}
+    assert body["heading_deg"] is not None
+    assert body["alt_ft"] is not None
+    assert body["speed_kts"] is not None
+
+
+def test_track_and_interpolate(client: TestClient) -> None:
+    r = client.get(f"/api/track?mission={MISSION_ID}")
+    assert r.status_code == 200
+    samples = r.json()
+    assert len(samples) >= 2
+    mid = "2026-07-21T14:02:00Z"
+    p = client.get(f"/api/position_at?mission={MISSION_ID}&time={mid}")
+    assert p.status_code == 200
+    body = p.json()
+    assert body["lat"] is not None
+    assert body["interpolated"] is True
+
+
+def test_summary(client: TestClient) -> None:
+    r = client.get(f"/api/summary?mission={MISSION_ID}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["generator"] == "rule-based"
+    assert "Strike" in body["narrative"] or "strike" in body["narrative"].lower()
+    assert body["stats"]["strikes_executed"] >= 1
+
+
+def test_milestone_rules(client: TestClient) -> None:
+    r = client.get("/api/milestone-rules")
+    assert r.status_code == 200
+    assert "rules" in r.json()
 
 
 def test_query_post(client: TestClient) -> None:

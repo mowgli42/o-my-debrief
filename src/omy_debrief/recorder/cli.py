@@ -33,10 +33,13 @@ def _now() -> str:
 def normalize_message(raw: dict[str, Any] | str, topic: str = "") -> dict[str, Any]:
     """Normalize a bus message or demo JSONL row into the Parquet schema dict."""
     if isinstance(raw, str):
+        text = raw.strip()
+        if text.startswith("<"):
+            return _normalize_oms_xml(text, topic=topic)
         try:
-            raw = json.loads(raw)
+            raw = json.loads(text)
         except json.JSONDecodeError:
-            raw = {"summary": raw, "payload": {"raw": raw}}
+            raw = {"summary": text, "payload": {"raw": text}}
 
     assert isinstance(raw, dict)
     if "event_id" in raw and "event_type" in raw and "timestamp" in raw:
@@ -72,6 +75,83 @@ def normalize_message(raw: dict[str, Any] | str, topic: str = "") -> dict[str, A
         "status": raw.get("status") or raw.get("readiness"),
         "payload_json": json.dumps(payload if isinstance(payload, dict) else {"value": payload}),
         "marker": raw.get("marker") or "none",
+    }
+
+
+def _local(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
+
+
+def _normalize_oms_xml(xml_text: str, topic: str = "") -> dict[str, Any]:
+    """Parse o-my / o-my-sim PlatformStatusReport (and light task) XML into a row."""
+    import xml.etree.ElementTree as ET
+
+    root = ET.fromstring(xml_text)
+    header = {}
+    body_el = None
+    for child in root:
+        name = _local(child.tag)
+        if name == "Header":
+            for h in child:
+                header[_local(h.tag)] = (h.text or "").strip()
+        else:
+            body_el = child
+
+    msg_type = header.get("MessageType", "")
+    ts = header.get("Timestamp") or _now()
+    msg_id = header.get("MessageID") or f"REC-{int(time.time() * 1000)}"
+
+    fields: dict[str, str] = {}
+    if body_el is not None:
+        for el in body_el.iter():
+            name = _local(el.tag)
+            if el.text and el.text.strip() and len(list(el)) == 0:
+                fields[name] = el.text.strip()
+
+    event_type = "other"
+    marker = "none"
+    summary = msg_type or topic or "oms"
+    status = fields.get("Readiness")
+    lat = lon = None
+    payload: dict[str, Any] = dict(fields)
+
+    if "PlatformStatus" in msg_type or topic.endswith("platform.status"):
+        event_type = "systemStatus"
+        summary = f"{fields.get('Callsign', 'platform')} status"
+        lat = float(fields["Latitude"]) if "Latitude" in fields else None
+        lon = float(fields["Longitude"]) if "Longitude" in fields else None
+        payload.update(
+            {
+                "callsign": fields.get("Callsign"),
+                "fuel_percent": float(fields["FuelPercent"]) if "FuelPercent" in fields else None,
+                "weapons": {"remaining": int(fields["WeaponsRemaining"])}
+                if "WeaponsRemaining" in fields
+                else {},
+                "datalink_up": True,
+            }
+        )
+        status = fields.get("Readiness", "GREEN")
+    elif "Task" in msg_type or "task" in topic:
+        event_type = "task"
+        marker = "caret"
+        status = fields.get("Status") or fields.get("TaskStatus") or "ASSIGNED"
+        summary = f"Task {fields.get('TaskID', msg_id)} {status}"
+        payload["task_id"] = fields.get("TaskID")
+
+    return {
+        "event_id": msg_id,
+        "mission_id": fields.get("MissionID") or "live-session",
+        "timestamp": ts,
+        "event_type": event_type,
+        "source_topic": topic,
+        "summary": summary,
+        "target_id": fields.get("TargetID") or fields.get("TargetId"),
+        "lat": lat,
+        "lon": lon,
+        "sensor": fields.get("Sensor"),
+        "status": status,
+        "payload_json": json.dumps(payload),
+        "marker": marker,
     }
 
 

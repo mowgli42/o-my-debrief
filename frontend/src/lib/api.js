@@ -28,6 +28,20 @@ export function fetchWaypoints(mission) {
   return get(`/api/missions/${encodeURIComponent(mission)}/waypoints`)
 }
 
+export function fetchTrack(mission) {
+  return get(`/api/track?mission=${encodeURIComponent(mission)}`)
+}
+
+export function fetchPositionAt(mission, time) {
+  return get(
+    `/api/position_at?mission=${encodeURIComponent(mission)}&time=${encodeURIComponent(time)}`,
+  )
+}
+
+export function fetchSummary(mission) {
+  return get(`/api/summary?mission=${encodeURIComponent(mission)}`)
+}
+
 export function sensorColor(sensor) {
   const s = (sensor || '').toUpperCase()
   if (s === 'EO') return '#4da3ff'
@@ -38,7 +52,7 @@ export function sensorColor(sensor) {
 
 export function markerGlyph(marker) {
   if (marker === 'diamond') return '◆'
-  if (marker === 'caret') return '▶'
+  if (marker === 'caret') return '▼'
   if (marker === 'flag') return '⚑'
   if (marker === 'circle') return '●'
   return '·'

@@ -13,10 +13,11 @@ Feature: o-my Platform Debrief
     Given I am on the debrief display for a sample strike-recon mission
     When I select the mission and the timeline loads with event markers
     Then I see ◆ diamond markers for sensor collection events (color coded by EO/IR/SAR)
-    And ▶ caret markers for strike task executions
+    And ▼ down-caret markers for strike task executions
     And the map shows the route waypoints and task locations
     When I scrub the timeline or click play
     Then the vehicle status panel updates fuel, datalink, payload, weapons loadout, and bay/gear status in sync
+    And flight instruments show airspeed, attitude, altimeter, and heading for the scrubbed time
     And key milestones on the left highlight or scroll to the current time's events
 
   @recorder @parquet
@@ -41,7 +42,7 @@ Feature: o-my Platform Debrief
     Given a mission with both sensor collection events and strike task executions
     When the display renders the top timeline
     Then sensor events appear as ◆ diamonds (with sensor-type colors)
-    And strike/attack tasks appear as ▶ carets or distinct arrow markers (with execution status colors)
+    And strike/attack tasks appear as ▼ down carets (with execution status colors)
     And hovering or clicking a marker updates the map selection and left milestones panel
 
   @map @tasks
@@ -60,8 +61,9 @@ Feature: o-my Platform Debrief
     And Datalink indicator shows up/down status with last contact
     And Payload section lists active sensors/modes and last collect time
     And Weapons loadout shows initial vs remaining counts, with expended items noted by time
-    And Landing gear / weapons bay indicators change state (e.g. bay opens before/during strike, closes after)
-    And all values are consistent with the messages at or near the scrubbed time
+    And Landing gear / weapons bay indicators show icons and change state (e.g. bay opens before/during strike, closes after)
+    And the current waypoint is displayed
+    And assigned tasks are listed with their latest status at the scrubbed time
 
   @milestones @left-panel
   Scenario: Key milestones panel provides stacked, clickable summary of mission outcomes
@@ -70,7 +72,9 @@ Feature: o-my Platform Debrief
     Then it shows a chronological stack of high-value milestones (e.g. "EO Collect on TGT-042 ✓ disseminated", "Strike EXECUTED - munitions released", "BDA: target state verified neutralized")
     And each has timestamp, icon matching timeline symbol, outcome summary, and status
     When I click one
-    Then timeline scrubs to that time, map centers on relevant location, and vehicle panel loads that instant's state
+    Then timeline scrubs to that time and highlights the associated event marker
+    And map centers on relevant location, and vehicle panel loads that instant's state
+    And the milestones list scrolls to keep the selection visible
 
   @export @after-action
   Scenario: Export debrief artifacts for after-action review or reporting

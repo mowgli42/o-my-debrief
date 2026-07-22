@@ -49,6 +49,19 @@ class Milestone(BaseModel):
     lat: float | None = None
     lon: float | None = None
     target_id: str | None = None
+    linked_to_strike: bool = False
+    linked_strike_event_id: str | None = None
+    link_note: str | None = None
+
+
+class TaskStatusEntry(BaseModel):
+    task_id: str
+    status: str
+    timestamp: str
+    target_id: str | None = None
+    summary: str = ""
+    lat: float | None = None
+    lon: float | None = None
 
 
 class PlatformState(BaseModel):
@@ -60,6 +73,8 @@ class PlatformState(BaseModel):
     alt_ft: float | None = None
     heading_deg: float | None = None
     speed_kts: float | None = None
+    roll_deg: float | None = None
+    pitch_deg: float | None = None
     fuel_percent: float = 100.0
     datalink_up: bool = True
     datalink_mbps: float | None = 4.2
@@ -71,6 +86,9 @@ class PlatformState(BaseModel):
     gear: Literal["up", "down"] = "up"
     weapons_bay: Literal["open", "closed"] = "closed"
     readiness: str = "GREEN"
+    current_waypoint: str | None = None
+    current_waypoint_index: int | None = None
+    tasks: list[TaskStatusEntry] = Field(default_factory=list)
     nearby_events: list[DebriefEvent] = Field(default_factory=list)
 
 

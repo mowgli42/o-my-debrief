@@ -4,10 +4,10 @@
 
 Captures live or simulated OMS bus messages from o-my Redis topics, persists them to Parquet, exposes time/milestone queries via FastAPI + Swagger, and renders a Svelte debrief station with:
 
-- Interactive timeline — **◆** sensor collects, **▶** strike tasks, **⚑** BDA
-- Stacked key milestones (left)
-- Route / task map (center)
-- Vehicle status at scrub time — fuel, datalink, payload, weapons, gear / bay
+- Interactive timeline — **◆** sensor collects, **▼** strike tasks, **⚑** BDA
+- Stacked key milestones (left) — scrollable; selection highlights timeline event
+- Route / task map (center) — strike points as down carets
+- Vehicle status at scrub time — flight instruments (airspeed / attitude / altimeter / heading), waypoint, assigned tasks, fuel, datalink, payload, weapons / gear / bay icons
 
 ---
 
@@ -20,13 +20,20 @@ Captures live or simulated OMS bus messages from o-my Redis topics, persists the
 | OpenSpec + Gherkin acceptance scenarios | Shipped |
 | Beads epic + phased issues (`omd-h3a`) | Shipped |
 | Demo mission generator → Parquet + manifest | Shipped |
-| Recorder (demo / JSONL / Redis) | Shipped (Redis live = optional) |
-| FastAPI `/api/missions` `/events` `/milestones` `/state_at` + Swagger | Shipped |
-| Svelte display (timeline, milestones, map, status, export JSON) | Shipped |
-| Unit tests (`make test`) | Shipped (6) |
+| Recorder (demo / JSONL / Redis + OMS XML) | Shipped |
+| FastAPI query API + Swagger | Shipped |
+| YAML milestone classifier + BDA linkage | Shipped |
+| Track samples + interpolated `/api/position_at` | Shipped |
+| Rule-based AAR `/api/summary` | Shipped |
+| Svelte display (timeline ◆/▼, milestones, map, status, export) | Shipped |
+| Platform panel: waypoint, tasks, gear/bay/weapons icons | Shipped |
+| Flight instruments (ASI / attitude / altimeter / HDG) | Shipped |
+| Unit tests (`make test`) | Shipped (12) |
 | Screenshots | Shipped (`docs/screenshots/`) |
 
-Living spec: [`openspec/specs/o-my-debrief/spec.md`](openspec/specs/o-my-debrief/spec.md) · Gherkin: [`features/o-my-debrief.feature`](features/o-my-debrief.feature) · Beads: [`BEADS.md`](BEADS.md) · **Grok callouts:** [`docs/GROK-TASKS.md`](docs/GROK-TASKS.md)
+Living spec: [`openspec/specs/o-my-debrief/spec.md`](openspec/specs/o-my-debrief/spec.md) · Gherkin: [`features/o-my-debrief.feature`](features/o-my-debrief.feature) · Beads: [`BEADS.md`](BEADS.md) · Grok notes: [`docs/GROK-TASKS.md`](docs/GROK-TASKS.md) · Classifier design: [`docs/MILESTONE-CLASSIFIER.md`](docs/MILESTONE-CLASSIFIER.md) · o-my-sim: [`docs/OMY-SIM-INTEGRATION.md`](docs/OMY-SIM-INTEGRATION.md) · Flight instruments: [`docs/FLIGHT-INDICATORS.md`](docs/FLIGHT-INDICATORS.md)
+
+GitHub issues (mirrored from beads): [#2](https://github.com/mowgli42/o-my-debrief/issues/2) [#3](https://github.com/mowgli42/o-my-debrief/issues/3) [#4](https://github.com/mowgli42/o-my-debrief/issues/4) [#5](https://github.com/mowgli42/o-my-debrief/issues/5)
 
 ---
 
@@ -66,13 +73,13 @@ Docker: `docker compose up` (API :8020, UI :5173). Live Redis profile: `docker c
 
 ## Screenshots
 
-![Debrief overview — timeline, milestones, map, platform status](docs/screenshots/01-debrief-overview.png)
+![Debrief overview — ◆ collect / ▼ strike timeline, scrollable milestones](docs/screenshots/01-debrief-overview.png)
 
-![Timeline scrub mid-mission](docs/screenshots/02-timeline-scrub.png)
+![Timeline scrub mid-mission with track replay](docs/screenshots/02-timeline-scrub.png)
 
-![Strike EXECUTED selected — bay open, munitions expended](docs/screenshots/03-strike-milestone.png)
+![Strike EXECUTED — instruments, bay open, tasks, timeline highlight](docs/screenshots/03-strike-milestone.png)
 
-![BDA verified + platform state](docs/screenshots/04-bda-and-status.png)
+![BDA verified — flight instruments + linked strike note](docs/screenshots/04-bda-and-status.png)
 
 Refresh captures (API + Vite running):
 
@@ -106,7 +113,7 @@ flowchart LR
   end
 
   subgraph UI["debrief-display — Svelte 5"]
-    TL[Timeline ◆ ▶]
+    TL[Timeline ◆ ▼]
     Left[Milestones]
     Map[Leaflet map]
     Veh[Vehicle status]
@@ -161,7 +168,7 @@ sequenceDiagram
   API-->>UI: events, milestones, route
   UI->>API: GET /api/state_at?time=start
   API-->>UI: platform snapshot
-  Pilot->>UI: Scrub timeline / click ◆ or ▶
+  Pilot->>UI: Scrub timeline / click ◆ or ▼
   UI->>API: GET /api/state_at?time=T
   API-->>UI: fuel, bay, weapons, lat/lon…
   UI->>UI: Sync map highlight + milestone active row
