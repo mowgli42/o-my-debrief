@@ -25,7 +25,9 @@ Captures live or simulated OMS bus messages from o-my Redis topics, persists the
 | YAML milestone classifier + BDA linkage | Shipped |
 | Track samples + interpolated `/api/position_at` | Shipped |
 | Rule-based AAR `/api/summary` | Shipped |
-| Svelte display (timeline, milestones, map, status, export) | Shipped |
+| Svelte display (timeline ◆/▼, milestones, map, status, export) | Shipped |
+| Platform panel: waypoint, tasks, gear/bay/weapons icons | Shipped |
+| Flight instruments (ASI / attitude / altimeter / HDG) | Shipped |
 | Unit tests (`make test`) | Shipped (12) |
 | Screenshots | Shipped (`docs/screenshots/`) |
 
