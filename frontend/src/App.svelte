@@ -8,7 +8,10 @@
     fetchEvents,
     fetchMilestones,
     fetchMissions,
+    fetchPositionAt,
     fetchStateAt,
+    fetchSummary,
+    fetchTrack,
     fetchWaypoints,
     formatTime,
     toMs,
@@ -20,25 +23,31 @@
   let events = $state([])
   let milestones = $state([])
   let waypoints = $state([])
+  let track = $state([])
   let platformState = $state(null)
+  let position = $state(null)
   let currentTime = $state(null)
   let playing = $state(false)
   let error = $state('')
   let loading = $state(true)
+  let summaryOpen = $state(false)
+  let summaryText = $state('')
   let playTimer = null
 
   async function loadMission(id) {
     loading = true
     error = ''
     try {
-      const [ev, ms, wp] = await Promise.all([
+      const [ev, ms, wp, tr] = await Promise.all([
         fetchEvents(id),
         fetchMilestones(id),
         fetchWaypoints(id),
+        fetchTrack(id),
       ])
       events = ev
       milestones = ms
       waypoints = wp
+      track = tr
       const m = missions.find((x) => x.mission_id === id)
       currentTime = m?.start_time || ev[0]?.timestamp
       await refreshState()
@@ -52,7 +61,23 @@
   async function refreshState() {
     if (!missionId || !currentTime) return
     try {
-      platformState = await fetchStateAt(missionId, currentTime)
+      const [st, pos] = await Promise.all([
+        fetchStateAt(missionId, currentTime),
+        fetchPositionAt(missionId, currentTime).catch(() => null),
+      ])
+      platformState = st
+      position = pos
+      // Prefer interpolated lat/lon on platform panel when available
+      if (pos?.lat != null && platformState) {
+        platformState = {
+          ...platformState,
+          lat: pos.lat,
+          lon: pos.lon,
+          heading_deg: pos.heading_deg ?? platformState.heading_deg,
+          alt_ft: pos.alt_ft ?? platformState.alt_ft,
+          speed_kts: pos.speed_kts ?? platformState.speed_kts,
+        }
+      }
     } catch (e) {
       error = String(e.message || e)
     }
@@ -77,15 +102,15 @@
       playTimer = null
     }
     if (!playing || !mission) return
-    const start = toMs(mission.start_time)
     const end = toMs(mission.end_time)
+    // ~20× realtime with smooth map steps (~3s mission time / 200ms frame)
     playTimer = setInterval(() => {
       const cur = toMs(currentTime)
-      const next = Math.min(end, cur + 15_000)
+      const next = Math.min(end, cur + 3_000)
       currentTime = new Date(next).toISOString().replace(/\.\d{3}Z$/, 'Z')
       refreshState()
       if (next >= end) playing = false
-    }, 400)
+    }, 200)
     return () => {
       if (playTimer) clearInterval(playTimer)
     }
@@ -98,6 +123,7 @@
       current_time: currentTime,
       milestones,
       state: platformState,
+      summary: summaryText || null,
       event_count: events.length,
       events: events.map((e) => ({
         event_id: e.event_id,
@@ -115,6 +141,17 @@
     a.download = `${missionId || 'debrief'}-export.json`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  async function openSummary() {
+    if (!missionId) return
+    try {
+      const s = await fetchSummary(missionId)
+      summaryText = s.narrative || ''
+      summaryOpen = true
+    } catch (e) {
+      error = String(e.message || e)
+    }
   }
 
   async function onMissionChange(e) {
@@ -174,6 +211,13 @@
       </button>
       <button
         type="button"
+        class="rounded-sm border border-[var(--line)] bg-[var(--bg-elevated)] px-3 py-1.5 text-sm hover:border-[var(--accent)]"
+        onclick={openSummary}
+      >
+        AAR Summary
+      </button>
+      <button
+        type="button"
         class="rounded-sm border border-[var(--accent)] bg-[rgba(61,214,198,0.12)] px-3 py-1.5 text-sm text-[var(--accent)]"
         onclick={exportJson}
       >
@@ -203,12 +247,39 @@
       <Milestones {milestones} {currentTime} onselect={selectMilestone} />
     </div>
     <div class="min-h-[320px] lg:col-span-6">
-      <MissionMap {waypoints} {events} platform={platformState} {currentTime} />
+      <MissionMap
+        {waypoints}
+        {events}
+        {track}
+        platform={platformState}
+        {position}
+        {currentTime}
+      />
     </div>
     <div class="min-h-[320px] lg:col-span-3">
       <VehicleStatus platform={platformState} />
     </div>
   </main>
+
+  {#if summaryOpen}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div class="panel max-h-[80vh] w-full max-w-2xl overflow-auto rounded-sm p-4">
+        <div class="mb-3 flex items-center justify-between">
+          <h2 class="text-sm font-semibold tracking-[0.12em] uppercase text-[var(--accent)]">
+            After-action summary
+          </h2>
+          <button
+            type="button"
+            class="text-sm text-[var(--muted)] hover:text-[var(--text)]"
+            onclick={() => (summaryOpen = false)}
+          >
+            Close
+          </button>
+        </div>
+        <pre class="mono whitespace-pre-wrap text-sm text-[var(--text)]">{summaryText}</pre>
+      </div>
+    </div>
+  {/if}
 
   {#if loading}
     <div class="pointer-events-none fixed inset-0 flex items-center justify-center bg-black/40">

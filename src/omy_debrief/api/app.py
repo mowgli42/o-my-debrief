@@ -81,6 +81,41 @@ def state_at(
         raise HTTPException(404, str(exc)) from exc
 
 
+@app.get("/api/track")
+def track(mission: str = Query(...)) -> list[dict[str, Any]]:
+    try:
+        return store.track_samples(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/position_at")
+def position_at(
+    mission: str = Query(...),
+    time: str = Query(..., description="ISO-8601 timestamp"),
+) -> dict[str, Any]:
+    try:
+        pos = store.interpolate_track(mission, time)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if pos is None:
+        raise HTTPException(404, "No track samples for mission")
+    return pos
+
+
+@app.get("/api/summary")
+def summary(mission: str = Query(...)) -> dict[str, Any]:
+    try:
+        return store.mission_summary(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/milestone-rules")
+def milestone_rules() -> dict[str, Any]:
+    return store.load_rules()
+
+
 @app.post("/api/query")
 def query(body: dict[str, Any]) -> list[DebriefEvent]:
     mission = body.get("mission")

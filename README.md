@@ -20,10 +20,13 @@ Captures live or simulated OMS bus messages from o-my Redis topics, persists the
 | OpenSpec + Gherkin acceptance scenarios | Shipped |
 | Beads epic + phased issues (`omd-h3a`) | Shipped |
 | Demo mission generator → Parquet + manifest | Shipped |
-| Recorder (demo / JSONL / Redis) | Shipped (Redis live = optional) |
-| FastAPI `/api/missions` `/events` `/milestones` `/state_at` + Swagger | Shipped |
-| Svelte display (timeline, milestones, map, status, export JSON) | Shipped |
-| Unit tests (`make test`) | Shipped (6) |
+| Recorder (demo / JSONL / Redis + OMS XML) | Shipped |
+| FastAPI query API + Swagger | Shipped |
+| YAML milestone classifier + BDA linkage | Shipped |
+| Track samples + interpolated `/api/position_at` | Shipped |
+| Rule-based AAR `/api/summary` | Shipped |
+| Svelte display (timeline, milestones, map, status, export) | Shipped |
+| Unit tests (`make test`) | Shipped (12) |
 | Screenshots | Shipped (`docs/screenshots/`) |
 
 Living spec: [`openspec/specs/o-my-debrief/spec.md`](openspec/specs/o-my-debrief/spec.md) · Gherkin: [`features/o-my-debrief.feature`](features/o-my-debrief.feature) · Beads: [`BEADS.md`](BEADS.md) · **Grok callouts:** [`docs/GROK-TASKS.md`](docs/GROK-TASKS.md)

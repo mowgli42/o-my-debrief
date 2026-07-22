@@ -49,6 +49,9 @@ class Milestone(BaseModel):
     lat: float | None = None
     lon: float | None = None
     target_id: str | None = None
+    linked_to_strike: bool = False
+    linked_strike_event_id: str | None = None
+    link_note: str | None = None
 
 
 class PlatformState(BaseModel):

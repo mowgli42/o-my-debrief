@@ -1,31 +1,21 @@
 # Tasks for Grok (or parallel agents)
 
-These beads are labeled `grok` and are intentionally left open for exploratory /
-design-heavy work while the MVP prototype lands on Composer/Cursor.
+Grok's design for `omd-h3a.8` is incorporated (`docs/MILESTONE-CLASSIFIER.md`,
+`config/milestone-rules.yaml`). Implementation completed on branch
+`cursor/incorporate-grok-c626` (including restore of `store.py` after a bad paste commit).
 
-| Bead | Title | Why Grok |
-|------|-------|----------|
-| `omd-h3a.8` | Milestone classifier rules YAML + richer BDA linkage | Config DSL design, rule edge cases, target_id graph linking |
-| `omd-h3a.9` | Full track replay + map animation polish | Interpolation math, LOD/clustering, animation feel |
-| `omd-h3a.10` | AI after-action summary from milestones | Prompt/schema design for optional local LLM AAR narrative |
-| `omd-h3a.11` | Live Redis recorder integration vs o-my-sim | Cross-repo topic fidelity, XML/JSON message normalization |
+| Bead | Title | Status |
+|------|-------|--------|
+| `omd-h3a.8` | Milestone classifier YAML + BDA linkage | Done (this PR) |
+| `omd-h3a.9` | Full track replay + map animation polish | Done (MVP interpolate + play) |
+| `omd-h3a.10` | AI after-action summary | Done (rule-based + LLM hook) |
+| `omd-h3a.11` | Live Redis vs o-my-sim | Done (XML normalize + unit tests; live manual) |
 
-## Suggested prompts for Grok
+## Optional follow-ups (new beads / GitHub issues)
 
-1. **Classifier YAML** — Propose a YAML schema for milestone rules covering
-   `sensor_collect`, `dissemination`, `strike_executed`, `bda_positive`,
-   `datalink_lost`. Include GIVEN/WHEN/THEN examples that map to
-   `features/o-my-debrief.feature`.
+1. **Spline / heading-aware track** — Catmull-Rom or dead-reckoning between sparse status samples.
+2. **Real local LLM AAR** — Wire `DEBRIEF_LLM_SUMMARY` adapter (Ollama) to replace rule narrative.
+3. **CI live Redis job** — Compose profile that boots o-my-sim publishers + recorder for e2e.
+4. **Map LOD / clustering** — When event counts exceed ~500 markers.
 
-2. **BDA linkage** — Given strike EXECUTED + later BDA with same `target_id`,
-   design how the API should return a linked milestone chain without breaking
-   the current `/api/milestones` response shape.
-
-3. **Track replay** — Spec an algorithm to interpolate lat/lon/heading between
-   `systemStatus` samples for smooth map play at 10–30× realtime.
-
-4. **o-my-sim live capture** — List exact Redis topics and payload fields from
-   `o-my-sim` publishers that the recorder must normalize into the Parquet schema
-   in `src/omy_debrief/demo/generate.py` (`SCHEMA`).
-
-Claim with: `bd update <id> --claim`
+See also: `docs/OMY-SIM-INTEGRATION.md`.

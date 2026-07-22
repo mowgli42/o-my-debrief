@@ -40,6 +40,9 @@
         </div>
         <div class="mt-1 text-sm font-medium">{m.title}</div>
         <div class="mt-0.5 text-xs text-[var(--muted)] line-clamp-2">{m.outcome}</div>
+        {#if m.linked_to_strike && m.link_note}
+          <div class="mt-1 text-[11px] text-[var(--verify)]">↳ {m.link_note}</div>
+        {/if}
       </button>
     {:else}
       <p class="p-3 text-sm text-[var(--muted)]">No milestones yet.</p>
