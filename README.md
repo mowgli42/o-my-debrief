@@ -29,7 +29,9 @@ Captures live or simulated OMS bus messages from o-my Redis topics, persists the
 | Unit tests (`make test`) | Shipped (12) |
 | Screenshots | Shipped (`docs/screenshots/`) |
 
-Living spec: [`openspec/specs/o-my-debrief/spec.md`](openspec/specs/o-my-debrief/spec.md) · Gherkin: [`features/o-my-debrief.feature`](features/o-my-debrief.feature) · Beads: [`BEADS.md`](BEADS.md) · **Grok callouts:** [`docs/GROK-TASKS.md`](docs/GROK-TASKS.md)
+Living spec: [`openspec/specs/o-my-debrief/spec.md`](openspec/specs/o-my-debrief/spec.md) · Gherkin: [`features/o-my-debrief.feature`](features/o-my-debrief.feature) · Beads: [`BEADS.md`](BEADS.md) · Grok notes: [`docs/GROK-TASKS.md`](docs/GROK-TASKS.md) · Classifier design: [`docs/MILESTONE-CLASSIFIER.md`](docs/MILESTONE-CLASSIFIER.md) · o-my-sim: [`docs/OMY-SIM-INTEGRATION.md`](docs/OMY-SIM-INTEGRATION.md)
+
+GitHub issues (mirrored from beads): [#2](https://github.com/mowgli42/o-my-debrief/issues/2) [#3](https://github.com/mowgli42/o-my-debrief/issues/3) [#4](https://github.com/mowgli42/o-my-debrief/issues/4) [#5](https://github.com/mowgli42/o-my-debrief/issues/5)
 
 ---
 
