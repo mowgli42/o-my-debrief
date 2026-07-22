@@ -1,0 +1,53 @@
+@import 'tailwindcss';
+
+:root {
+  --bg-deep: #0b1220;
+  --bg-panel: #121c2e;
+  --bg-elevated: #1a2740;
+  --line: #2a3b5c;
+  --text: #e8eef8;
+  --muted: #8fa3c1;
+  --accent: #3dd6c6;
+  --collect: #4da3ff;
+  --strike: #ff7a45;
+  --verify: #5ddea0;
+  --warn: #f0c14a;
+  --danger: #ff5c6c;
+  --font-display: 'Barlow', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-display);
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #16324f 0%, transparent 55%),
+    radial-gradient(900px 500px at 90% 0%, #1a2a22 0%, transparent 50%),
+    linear-gradient(180deg, #0b1220 0%, #0e1626 100%);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.panel {
+  background: color-mix(in srgb, var(--bg-panel) 92%, transparent);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+}
+
+.leaflet-container {
+  background: #0e1626;
+  font-family: var(--font-display);
+}
