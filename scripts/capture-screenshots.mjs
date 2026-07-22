@@ -58,6 +58,14 @@ async function main() {
   }
   await shot(page, '04-bda-and-status.png')
 
+  // Launch / Recovery tab: instruments + altitude profile
+  const launchTab = page.getByRole('tab', { name: /Launch\s*\/\s*Recovery/i })
+  if (await launchTab.count()) {
+    await launchTab.click()
+    await page.waitForTimeout(800)
+  }
+  await shot(page, '05-launch-recovery.png')
+
   await browser.close()
   console.log('done')
 }

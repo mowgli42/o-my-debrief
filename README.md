@@ -27,7 +27,8 @@ Captures live or simulated OMS bus messages from o-my Redis topics, persists the
 | Rule-based AAR `/api/summary` | Shipped |
 | Svelte display (timeline ◆/▼, milestones, map, status, export) | Shipped |
 | Platform panel: waypoint, tasks, gear/bay/weapons icons | Shipped |
-| Flight instruments (ASI / attitude / altimeter / HDG) | Shipped |
+| Flight instruments (ASI / attitude / altimeter / HDG) | Shipped (Launch / Recovery tab) |
+| Launch / Recovery altitude profile + gear/systems | Shipped |
 | Unit tests (`make test`) | Shipped (12) |
 | Screenshots | Shipped (`docs/screenshots/`) |
 
@@ -79,7 +80,9 @@ Docker: `docker compose up` (API :8020, UI :5173). Live Redis profile: `docker c
 
 ![Strike EXECUTED — instruments, bay open, tasks, timeline highlight](docs/screenshots/03-strike-milestone.png)
 
-![BDA verified — flight instruments + linked strike note](docs/screenshots/04-bda-and-status.png)
+![BDA verified — Mission tab (ops status without instruments)](docs/screenshots/04-bda-and-status.png)
+
+![Launch / Recovery — altitude profile, gear/systems, flight instruments](docs/screenshots/05-launch-recovery.png)
 
 Refresh captures (API + Vite running):
 

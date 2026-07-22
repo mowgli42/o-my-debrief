@@ -268,7 +268,7 @@
       />
     </div>
     <div class="min-h-0 lg:col-span-3">
-      <VehicleStatus platform={platformState} />
+      <VehicleStatus platform={platformState} {track} {currentTime} />
     </div>
   </main>
 

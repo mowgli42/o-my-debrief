@@ -17,7 +17,8 @@ Feature: o-my Platform Debrief
     And the map shows the route waypoints and task locations
     When I scrub the timeline or click play
     Then the vehicle status panel updates fuel, datalink, payload, weapons loadout, and bay/gear status in sync
-    And flight instruments show airspeed, attitude, altimeter, and heading for the scrubbed time
+    And the platform panel Mission tab stays free of flight instruments during cruise
+    And the Launch / Recovery tab shows flight instruments, altitude climb/descent profile, landing gear, and aircraft systems
     And key milestones on the left highlight or scroll to the current time's events
 
   @recorder @parquet
@@ -64,6 +65,7 @@ Feature: o-my Platform Debrief
     And Landing gear / weapons bay indicators show icons and change state (e.g. bay opens before/during strike, closes after)
     And the current waypoint is displayed
     And assigned tasks are listed with their latest status at the scrubbed time
+    And flight instruments and the altitude profile appear under the Launch / Recovery tab (not on Mission)
 
   @milestones @left-panel
   Scenario: Key milestones panel provides stacked, clickable summary of mission outcomes

@@ -18,14 +18,14 @@ CALLSIGN = "HAWK-1"
 
 # Rough route over a fictional AO (Mediterranean-ish coords for basemap)
 WAYPOINTS = [
-    (36.80, 35.40, "WP1 Ingress"),
-    (36.85, 35.55, "WP2 IP"),
+    (36.80, 35.40, "WP1 Takeoff"),
+    (36.85, 35.55, "WP2 Climb"),
     (36.92, 35.70, "WP3 Collect-1"),
     (36.98, 35.82, "WP4 Collect-2"),
     (37.05, 35.95, "WP5 Strike IP"),
     (37.10, 36.05, "WP6 Strike"),
-    (37.00, 36.20, "WP7 BDA"),
-    (36.85, 36.10, "WP8 Egress"),
+    (37.00, 36.20, "WP7 Approach"),
+    (36.85, 36.10, "WP8 Landing"),
 ]
 
 SCHEMA = pa.schema(
@@ -95,14 +95,20 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
         kwargs.setdefault("eid", f"EVT-{n:04d}")
         events.append(_event(base=base, **kwargs))
 
-    # Status samples every ~2 min along route with depleting fuel / bay / weapons
+    # Status samples along route: climb-out → cruise → descent, with gear at field
     weapons = {"GBU-39": 4, "AIM-120": 2}
     fuel = 94.0
+    n_wp = len(WAYPOINTS)
+    # Altitude / speed / pitch shaped for launch & recovery profile graph
+    alt_profile = [200, 4500, 12000, 17500, 18000, 17800, 6500, 800]
+    speed_profile = [145, 280, 380, 420, 430, 420, 260, 155]
+    pitch_profile = [8.0, 6.0, 2.5, 0.5, 0.0, -0.5, -4.5, -5.5]
     for i, (lat, lon, label) in enumerate(WAYPOINTS):
         t = i * 4.0
         fuel = max(55.0, 94.0 - i * 4.5)
         bay = "open" if 4 <= i <= 5 else "closed"
-        gear = "up"
+        # Gear down on takeoff and final approach / landing
+        gear = "down" if i == 0 or i >= n_wp - 2 else "up"
         if i == 5:
             weapons = {"GBU-39": 2, "AIM-120": 2}
         add(
@@ -123,12 +129,11 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
                 "weapons": dict(weapons),
                 "gear": gear,
                 "weapons_bay": bay,
-                "alt_ft": 18000 - i * 200,
+                "alt_ft": alt_profile[i],
                 "heading_deg": 55 + i * 8,
-                "speed_kts": 420,
-                # Mild bank/pitch for attitude indicator during route legs
+                "speed_kts": speed_profile[i],
                 "roll_deg": round(6 * ((i % 3) - 1), 1),
-                "pitch_deg": round(2.5 if i < 4 else -1.5, 1),
+                "pitch_deg": pitch_profile[i],
                 "waypoint": label,
             },
         )
