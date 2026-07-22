@@ -10,6 +10,7 @@
     platform = null,
     position = null,
     currentTime = null,
+    highlightEventId = null,
   } = $props()
 
   let mapEl = $state(null)
@@ -90,22 +91,40 @@
       if (e.lat == null || e.lon == null) continue
       if (!['sensorCollect', 'task', 'bda'].includes(e.event_type)) continue
       const past = new Date(e.timestamp).getTime() <= t
+      const highlighted = highlightEventId && e.event_id === highlightEventId
       const color =
         e.event_type === 'sensorCollect'
           ? sensorColor(e.sensor)
           : e.event_type === 'task'
             ? '#ff7a45'
             : '#5ddea0'
-      L.circleMarker([e.lat, e.lon], {
-        radius: e.event_type === 'task' ? 8 : 6,
-        color,
-        fillColor: color,
-        fillOpacity: past ? 0.85 : 0.25,
-        weight: past ? 2 : 1,
-        opacity: past ? 1 : 0.4,
-      })
-        .bindTooltip(e.summary, { direction: 'top' })
-        .addTo(eventLayer)
+      const opacity = past || highlighted ? 1 : 0.4
+
+      if (e.event_type === 'task' || e.marker === 'caret') {
+        const size = highlighted ? 22 : 18
+        L.marker([e.lat, e.lon], {
+          icon: L.divIcon({
+            className: '',
+            html: `<div style="font-size:${size}px;line-height:1;color:${color};text-shadow:0 0 6px rgba(0,0,0,.9);${highlighted ? 'outline:2px solid #3dd6c6;outline-offset:2px;border-radius:2px;' : ''}">▼</div>`,
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2],
+          }),
+          opacity,
+        })
+          .bindTooltip(e.summary, { direction: 'top' })
+          .addTo(eventLayer)
+      } else {
+        L.circleMarker([e.lat, e.lon], {
+          radius: highlighted ? 9 : e.event_type === 'bda' ? 7 : 6,
+          color: highlighted ? '#3dd6c6' : color,
+          fillColor: color,
+          fillOpacity: past || highlighted ? 0.85 : 0.25,
+          weight: highlighted ? 3 : past ? 2 : 1,
+          opacity,
+        })
+          .bindTooltip(e.summary, { direction: 'top' })
+          .addTo(eventLayer)
+      }
     }
   })
 

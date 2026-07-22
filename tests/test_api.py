@@ -75,11 +75,17 @@ def test_state_at(client: TestClient) -> None:
     r = client.get(f"/api/state_at?mission={MISSION_ID}&time={m['start_time']}")
     assert r.status_code == 200
     assert r.json()["fuel_percent"] <= 100
+    assert "current_waypoint" in r.json()
+    assert "tasks" in r.json()
 
     mid = "2026-07-21T14:20:00Z"
     r2 = client.get(f"/api/state_at?mission={MISSION_ID}&time={mid}")
     assert r2.status_code == 200
-    assert r2.json()["fuel_percent"] < 94
+    body = r2.json()
+    assert body["fuel_percent"] < 94
+    assert body["current_waypoint"]
+    assert any(t["status"] == "EXECUTED" for t in body["tasks"])
+    assert body["weapons_bay"] in {"open", "closed"}
 
 
 def test_track_and_interpolate(client: TestClient) -> None:

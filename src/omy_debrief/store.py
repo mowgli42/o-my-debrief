@@ -13,7 +13,13 @@ from typing import Any
 import pyarrow.parquet as pq
 import yaml
 
-from omy_debrief.models.events import DebriefEvent, Milestone, MissionManifest, PlatformState
+from omy_debrief.models.events import (
+    DebriefEvent,
+    Milestone,
+    MissionManifest,
+    PlatformState,
+    TaskStatusEntry,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RULES = REPO_ROOT / "config" / "milestone-rules.yaml"
@@ -333,6 +339,9 @@ def state_at(mission_id: str, time_iso: str) -> PlatformState:
     rows = sorted(_read_table(mission_id), key=lambda r: r["timestamp"])
     last_status: dict[str, Any] | None = None
     expended: list[dict[str, Any]] = []
+    current_waypoint: str | None = None
+    current_waypoint_index: int | None = None
+    tasks_by_id: dict[str, TaskStatusEntry] = {}
 
     for row in rows:
         ts = _parse_ts(row["timestamp"])
@@ -340,16 +349,40 @@ def state_at(mission_id: str, time_iso: str) -> PlatformState:
             break
         if row["event_type"] == "systemStatus":
             last_status = row
-        if row["event_type"] == "task" and (row.get("status") or "").upper() == "EXECUTED":
+            wp = (row.get("payload") or {}).get("waypoint")
+            if wp:
+                current_waypoint = str(wp)
+        if row["event_type"] == "waypoint":
             payload = row.get("payload") or {}
-            for mun in payload.get("munitions_released") or []:
-                expended.append(
-                    {
-                        "munition": mun,
-                        "timestamp": row["timestamp"],
-                        "target_id": row.get("target_id"),
-                    }
-                )
+            label = payload.get("waypoint") or row.get("summary")
+            if label:
+                current_waypoint = str(label)
+            if payload.get("index") is not None:
+                try:
+                    current_waypoint_index = int(payload["index"])
+                except (TypeError, ValueError):
+                    pass
+        if row["event_type"] == "task":
+            payload = row.get("payload") or {}
+            task_id = str(payload.get("task_id") or row.get("event_id"))
+            tasks_by_id[task_id] = TaskStatusEntry(
+                task_id=task_id,
+                status=(row.get("status") or "UNKNOWN").upper(),
+                timestamp=row["timestamp"],
+                target_id=row.get("target_id"),
+                summary=row.get("summary") or "",
+                lat=row.get("lat"),
+                lon=row.get("lon"),
+            )
+            if (row.get("status") or "").upper() == "EXECUTED":
+                for mun in payload.get("munitions_released") or []:
+                    expended.append(
+                        {
+                            "munition": mun,
+                            "timestamp": row["timestamp"],
+                            "target_id": row.get("target_id"),
+                        }
+                    )
 
     nearby = [
         row_to_event(r)
@@ -357,10 +390,22 @@ def state_at(mission_id: str, time_iso: str) -> PlatformState:
         if abs((_parse_ts(r["timestamp"]) - target).total_seconds()) <= 180
     ][:12]
 
+    tasks = sorted(tasks_by_id.values(), key=lambda t: t.timestamp)
+
     if not last_status:
-        return PlatformState(timestamp=time_iso, mission_id=mission_id, nearby_events=nearby)
+        return PlatformState(
+            timestamp=time_iso,
+            mission_id=mission_id,
+            current_waypoint=current_waypoint,
+            current_waypoint_index=current_waypoint_index,
+            tasks=tasks,
+            nearby_events=nearby,
+        )
 
     p = last_status.get("payload") or {}
+    if not current_waypoint and p.get("waypoint"):
+        current_waypoint = str(p.get("waypoint"))
+
     return PlatformState(
         timestamp=time_iso,
         mission_id=mission_id,
@@ -381,6 +426,9 @@ def state_at(mission_id: str, time_iso: str) -> PlatformState:
         gear=p.get("gear") or "up",
         weapons_bay=p.get("weapons_bay") or "closed",
         readiness=last_status.get("status") or "GREEN",
+        current_waypoint=current_waypoint,
+        current_waypoint_index=current_waypoint_index,
+        tasks=tasks,
         nearby_events=nearby,
     )
 

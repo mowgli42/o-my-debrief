@@ -42,11 +42,11 @@ async function main() {
   await page.waitForTimeout(500)
   await shot(page, '02-timeline-scrub.png')
 
-  // Click a strike milestone if present
+  // Click a strike milestone if present — highlights timeline event
   const strike = page.getByRole('button').filter({ hasText: /Strike EXECUTED/i }).first()
   if (await strike.count()) {
     await strike.click()
-    await page.waitForTimeout(800)
+    await page.waitForTimeout(1000)
   }
   await shot(page, '03-strike-milestone.png')
 
@@ -54,7 +54,7 @@ async function main() {
   const bda = page.getByRole('button').filter({ hasText: /BDA/i }).first()
   if (await bda.count()) {
     await bda.click()
-    await page.waitForTimeout(800)
+    await page.waitForTimeout(1000)
   }
   await shot(page, '04-bda-and-status.png')
 

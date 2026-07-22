@@ -32,6 +32,7 @@
   let loading = $state(true)
   let summaryOpen = $state(false)
   let summaryText = $state('')
+  let selectedEventId = $state(null)
   let playTimer = null
 
   async function loadMission(id) {
@@ -83,13 +84,14 @@
     }
   }
 
-  function scrub(iso) {
+  function scrub(iso, eventId = null) {
     currentTime = iso
+    selectedEventId = eventId
     refreshState()
   }
 
   function selectMilestone(m) {
-    scrub(m.timestamp)
+    scrub(m.timestamp, m.event_id || null)
   }
 
   function togglePlay() {
@@ -177,9 +179,9 @@
   })
 </script>
 
-<div class="flex h-full min-h-screen flex-col">
+<div class="flex h-screen min-h-0 flex-col overflow-hidden">
   <header
-    class="flex flex-wrap items-center gap-3 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--bg-panel)_90%,transparent)] px-4 py-3"
+    class="shrink-0 flex flex-wrap items-center gap-3 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--bg-panel)_90%,transparent)] px-4 py-3"
   >
     <div>
       <div class="text-[10px] tracking-[0.2em] uppercase text-[var(--muted)]">Open Arsenal · o-my</div>
@@ -232,21 +234,27 @@
     </div>
   {/if}
 
-  <div class="px-4 pt-3">
+  <div class="shrink-0 px-4 pt-3">
     <Timeline
       {events}
       start={mission?.start_time}
       end={mission?.end_time}
       {currentTime}
+      highlightEventId={selectedEventId}
       onscrub={scrub}
     />
   </div>
 
-  <main class="grid min-h-0 flex-1 grid-cols-1 gap-3 p-4 lg:grid-cols-12">
-    <div class="min-h-[320px] lg:col-span-3">
-      <Milestones {milestones} {currentTime} onselect={selectMilestone} />
+  <main class="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-4 lg:grid-cols-12">
+    <div class="min-h-0 lg:col-span-3">
+      <Milestones
+        {milestones}
+        {currentTime}
+        selectedEventId={selectedEventId}
+        onselect={selectMilestone}
+      />
     </div>
-    <div class="min-h-[320px] lg:col-span-6">
+    <div class="min-h-0 lg:col-span-6">
       <MissionMap
         {waypoints}
         {events}
@@ -254,9 +262,10 @@
         platform={platformState}
         {position}
         {currentTime}
+        highlightEventId={selectedEventId}
       />
     </div>
-    <div class="min-h-[320px] lg:col-span-3">
+    <div class="min-h-0 lg:col-span-3">
       <VehicleStatus platform={platformState} />
     </div>
   </main>

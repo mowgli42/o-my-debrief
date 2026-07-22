@@ -6,6 +6,7 @@
     start = null,
     end = null,
     currentTime = null,
+    highlightEventId = null,
     onscrub = undefined,
   } = $props()
 
@@ -32,6 +33,7 @@
               : e.marker === 'flag'
                 ? '#5ddea0'
                 : '#8fa3c1',
+        highlighted: highlightEventId && e.event_id === highlightEventId,
       })),
   )
 
@@ -66,7 +68,7 @@
 <div class="timeline panel rounded-sm p-3">
   <div class="mb-2 flex items-center justify-between text-xs tracking-wide text-[var(--muted)]">
     <span class="mono">{formatTime(start)}</span>
-    <span class="uppercase">Mission timeline · ◆ collect · ▶ strike</span>
+    <span class="uppercase">Mission timeline · ◆ collect · ▼ strike</span>
     <span class="mono">{formatTime(end)}</span>
   </div>
 
@@ -92,12 +94,19 @@
     {#each markers as m (m.event_id)}
       <button
         type="button"
-        class="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 text-lg leading-none transition-transform hover:scale-125"
-        style={`left:${m.pct}%; color:${m.color}`}
+        class="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 leading-none transition-transform hover:scale-125"
+        class:text-xl={!m.highlighted}
+        class:text-2xl={m.highlighted}
+        class:scale-125={m.highlighted}
+        class:drop-shadow-[0_0_8px_rgba(255,122,69,0.9)]={m.highlighted && m.marker === 'caret'}
+        class:drop-shadow-[0_0_8px_rgba(61,214,198,0.9)]={m.highlighted && m.marker !== 'caret'}
+        style={`left:${m.pct}%; color:${m.color}; ${m.highlighted ? 'outline:2px solid var(--accent); outline-offset:2px; border-radius:2px;' : ''}`}
         title={`${formatTime(m.timestamp)} — ${m.summary}`}
+        data-event-id={m.event_id}
+        aria-current={m.highlighted ? 'true' : undefined}
         onclick={(ev) => {
           ev.stopPropagation()
-          onscrub?.(m.timestamp)
+          onscrub?.(m.timestamp, m.event_id)
         }}
       >
         {markerGlyph(m.marker)}

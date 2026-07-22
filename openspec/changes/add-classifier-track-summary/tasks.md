@@ -17,3 +17,9 @@
 - [x] OpenSpec change proposal
 - [ ] GitHub issues mirrored from remaining beads
 - [ ] Close beads omd-h3a.8–.11 when verified
+
+## 5. UI polish (follow-on)
+- [x] Strike markers as ▼ down carets (timeline + map)
+- [x] Platform panel: current waypoint, assigned tasks + status, weapons/gear/bay icons
+- [x] Milestone list scroll + selection highlights timeline event
+- [x] Docs + screenshots refreshed

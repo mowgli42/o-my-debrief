@@ -52,7 +52,7 @@ export function sensorColor(sensor) {
 
 export function markerGlyph(marker) {
   if (marker === 'diamond') return '◆'
-  if (marker === 'caret') return '▶'
+  if (marker === 'caret') return '▼'
   if (marker === 'flag') return '⚑'
   if (marker === 'circle') return '●'
   return '·'

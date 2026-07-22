@@ -4,10 +4,10 @@
 
 Captures live or simulated OMS bus messages from o-my Redis topics, persists them to Parquet, exposes time/milestone queries via FastAPI + Swagger, and renders a Svelte debrief station with:
 
-- Interactive timeline — **◆** sensor collects, **▶** strike tasks, **⚑** BDA
-- Stacked key milestones (left)
-- Route / task map (center)
-- Vehicle status at scrub time — fuel, datalink, payload, weapons, gear / bay
+- Interactive timeline — **◆** sensor collects, **▼** strike tasks, **⚑** BDA
+- Stacked key milestones (left) — scrollable; selection highlights timeline event
+- Route / task map (center) — strike points as down carets
+- Vehicle status at scrub time — waypoint, assigned tasks, fuel, datalink, payload, weapons / gear / bay icons
 
 ---
 
@@ -71,13 +71,13 @@ Docker: `docker compose up` (API :8020, UI :5173). Live Redis profile: `docker c
 
 ## Screenshots
 
-![Debrief overview — timeline, milestones, map, platform status](docs/screenshots/01-debrief-overview.png)
+![Debrief overview — ◆ collect / ▼ strike timeline, scrollable milestones](docs/screenshots/01-debrief-overview.png)
 
-![Timeline scrub mid-mission](docs/screenshots/02-timeline-scrub.png)
+![Timeline scrub mid-mission with track replay](docs/screenshots/02-timeline-scrub.png)
 
-![Strike EXECUTED selected — bay open, munitions expended](docs/screenshots/03-strike-milestone.png)
+![Strike EXECUTED selected — timeline highlight, bay open, tasks + icons](docs/screenshots/03-strike-milestone.png)
 
-![BDA verified + platform state](docs/screenshots/04-bda-and-status.png)
+![BDA verified — linked strike note + platform waypoint/tasks](docs/screenshots/04-bda-and-status.png)
 
 Refresh captures (API + Vite running):
 
@@ -111,7 +111,7 @@ flowchart LR
   end
 
   subgraph UI["debrief-display — Svelte 5"]
-    TL[Timeline ◆ ▶]
+    TL[Timeline ◆ ▼]
     Left[Milestones]
     Map[Leaflet map]
     Veh[Vehicle status]
@@ -166,7 +166,7 @@ sequenceDiagram
   API-->>UI: events, milestones, route
   UI->>API: GET /api/state_at?time=start
   API-->>UI: platform snapshot
-  Pilot->>UI: Scrub timeline / click ◆ or ▶
+  Pilot->>UI: Scrub timeline / click ◆ or ▼
   UI->>API: GET /api/state_at?time=T
   API-->>UI: fuel, bay, weapons, lat/lon…
   UI->>UI: Sync map highlight + milestone active row
