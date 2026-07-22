@@ -1,0 +1,56 @@
+version: 1
+
+rules:
+  - kind: sensor_collect
+    when:
+      event_type: sensorCollect
+      status: success
+    title_template: "{sensor} collect on {target_id or 'target'}"
+    marker: diamond
+    outcome_from: summary
+
+  - kind: dissemination
+    when:
+      event_type: dissemination
+      status: [delivered, success, ok]
+    title_template: "Data disseminated ({target_id or 'product'})"
+    marker: circle
+
+  - kind: strike_assigned
+    when:
+      event_type: task
+      status: ASSIGNED
+    title_template: "Strike assigned — {target_id}"
+    marker: caret
+    status: pending
+
+  - kind: strike_executed
+    when:
+      event_type: task
+      status: EXECUTED
+    title_template: "Strike EXECUTED — {target_id}"
+    marker: caret
+
+  - kind: bda
+    when:
+      event_type: bda
+    title_template: "BDA: {target_id} verified"
+    marker: flag
+    positive_if:
+      payload.assessment: [neutralized, destroyed, killed]
+      summary_contains: neutralized|destroyed|verified positive
+
+  - kind: datalink_lost
+    when:
+      event_type: systemStatus
+      payload.datalink_up: false
+    title_template: "Datalink lost"
+    marker: none
+    status: warning
+
+linkage:
+  bda_to_strike:
+    within_minutes: 15
+    match_on: target_id
+    add_fields:
+      linked_to_strike: true
