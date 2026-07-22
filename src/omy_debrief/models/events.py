@@ -73,6 +73,8 @@ class PlatformState(BaseModel):
     alt_ft: float | None = None
     heading_deg: float | None = None
     speed_kts: float | None = None
+    roll_deg: float | None = None
+    pitch_deg: float | None = None
     fuel_percent: float = 100.0
     datalink_up: bool = True
     datalink_mbps: float | None = 4.2

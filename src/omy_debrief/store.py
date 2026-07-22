@@ -415,6 +415,8 @@ def state_at(mission_id: str, time_iso: str) -> PlatformState:
         alt_ft=p.get("alt_ft"),
         heading_deg=p.get("heading_deg"),
         speed_kts=p.get("speed_kts"),
+        roll_deg=p.get("roll_deg"),
+        pitch_deg=p.get("pitch_deg"),
         fuel_percent=float(p.get("fuel_percent", 100)),
         datalink_up=bool(p.get("datalink_up", True)),
         datalink_mbps=p.get("datalink_mbps"),
@@ -461,6 +463,8 @@ def track_samples(mission_id: str) -> list[dict[str, Any]]:
                 "alt_ft": p.get("alt_ft"),
                 "heading_deg": p.get("heading_deg"),
                 "speed_kts": p.get("speed_kts"),
+                "roll_deg": p.get("roll_deg"),
+                "pitch_deg": p.get("pitch_deg"),
                 "fuel_percent": p.get("fuel_percent"),
             }
         )
@@ -497,6 +501,8 @@ def interpolate_track(mission_id: str, time_iso: str) -> dict[str, Any] | None:
                 "alt_ft": lerp(a.get("alt_ft"), b.get("alt_ft")),
                 "heading_deg": lerp(a.get("heading_deg"), b.get("heading_deg")),
                 "speed_kts": lerp(a.get("speed_kts"), b.get("speed_kts")),
+                "roll_deg": lerp(a.get("roll_deg"), b.get("roll_deg")),
+                "pitch_deg": lerp(a.get("pitch_deg"), b.get("pitch_deg")),
                 "fuel_percent": lerp(a.get("fuel_percent"), b.get("fuel_percent")),
                 "interpolated": True,
             }

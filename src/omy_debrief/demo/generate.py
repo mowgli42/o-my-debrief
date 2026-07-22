@@ -126,6 +126,9 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
                 "alt_ft": 18000 - i * 200,
                 "heading_deg": 55 + i * 8,
                 "speed_kts": 420,
+                # Mild bank/pitch for attitude indicator during route legs
+                "roll_deg": round(6 * ((i % 3) - 1), 1),
+                "pitch_deg": round(2.5 if i < 4 else -1.5, 1),
                 "waypoint": label,
             },
         )

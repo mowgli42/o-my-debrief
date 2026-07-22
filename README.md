@@ -7,7 +7,7 @@ Captures live or simulated OMS bus messages from o-my Redis topics, persists the
 - Interactive timeline — **◆** sensor collects, **▼** strike tasks, **⚑** BDA
 - Stacked key milestones (left) — scrollable; selection highlights timeline event
 - Route / task map (center) — strike points as down carets
-- Vehicle status at scrub time — waypoint, assigned tasks, fuel, datalink, payload, weapons / gear / bay icons
+- Vehicle status at scrub time — flight instruments (airspeed / attitude / altimeter / heading), waypoint, assigned tasks, fuel, datalink, payload, weapons / gear / bay icons
 
 ---
 
@@ -29,7 +29,7 @@ Captures live or simulated OMS bus messages from o-my Redis topics, persists the
 | Unit tests (`make test`) | Shipped (12) |
 | Screenshots | Shipped (`docs/screenshots/`) |
 
-Living spec: [`openspec/specs/o-my-debrief/spec.md`](openspec/specs/o-my-debrief/spec.md) · Gherkin: [`features/o-my-debrief.feature`](features/o-my-debrief.feature) · Beads: [`BEADS.md`](BEADS.md) · Grok notes: [`docs/GROK-TASKS.md`](docs/GROK-TASKS.md) · Classifier design: [`docs/MILESTONE-CLASSIFIER.md`](docs/MILESTONE-CLASSIFIER.md) · o-my-sim: [`docs/OMY-SIM-INTEGRATION.md`](docs/OMY-SIM-INTEGRATION.md)
+Living spec: [`openspec/specs/o-my-debrief/spec.md`](openspec/specs/o-my-debrief/spec.md) · Gherkin: [`features/o-my-debrief.feature`](features/o-my-debrief.feature) · Beads: [`BEADS.md`](BEADS.md) · Grok notes: [`docs/GROK-TASKS.md`](docs/GROK-TASKS.md) · Classifier design: [`docs/MILESTONE-CLASSIFIER.md`](docs/MILESTONE-CLASSIFIER.md) · o-my-sim: [`docs/OMY-SIM-INTEGRATION.md`](docs/OMY-SIM-INTEGRATION.md) · Flight instruments: [`docs/FLIGHT-INDICATORS.md`](docs/FLIGHT-INDICATORS.md)
 
 GitHub issues (mirrored from beads): [#2](https://github.com/mowgli42/o-my-debrief/issues/2) [#3](https://github.com/mowgli42/o-my-debrief/issues/3) [#4](https://github.com/mowgli42/o-my-debrief/issues/4) [#5](https://github.com/mowgli42/o-my-debrief/issues/5)
 
@@ -75,9 +75,9 @@ Docker: `docker compose up` (API :8020, UI :5173). Live Redis profile: `docker c
 
 ![Timeline scrub mid-mission with track replay](docs/screenshots/02-timeline-scrub.png)
 
-![Strike EXECUTED selected — timeline highlight, bay open, tasks + icons](docs/screenshots/03-strike-milestone.png)
+![Strike EXECUTED — instruments, bay open, tasks, timeline highlight](docs/screenshots/03-strike-milestone.png)
 
-![BDA verified — linked strike note + platform waypoint/tasks](docs/screenshots/04-bda-and-status.png)
+![BDA verified — flight instruments + linked strike note](docs/screenshots/04-bda-and-status.png)
 
 Refresh captures (API + Vite running):
 

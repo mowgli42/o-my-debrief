@@ -1,5 +1,6 @@
 <script>
   import { formatTime } from './api.js'
+  import FlightInstruments from './FlightInstruments.svelte'
 
   let { platform = null } = $props()
 
@@ -47,6 +48,14 @@
           </div>
         </div>
       </section>
+
+      <FlightInstruments
+        airspeed={platform.speed_kts ?? 0}
+        altitude={platform.alt_ft ?? 0}
+        heading={platform.heading_deg ?? 0}
+        roll={platform.roll_deg ?? 0}
+        pitch={platform.pitch_deg ?? 0}
+      />
 
       <section>
         <div class="mb-1 flex justify-between text-xs uppercase tracking-wider text-[var(--muted)]">

@@ -68,15 +68,17 @@
       ])
       platformState = st
       position = pos
-      // Prefer interpolated lat/lon on platform panel when available
-      if (pos?.lat != null && platformState) {
+      // Prefer interpolated kinematics on platform panel when available
+      if (pos && platformState) {
         platformState = {
           ...platformState,
-          lat: pos.lat,
-          lon: pos.lon,
+          lat: pos.lat ?? platformState.lat,
+          lon: pos.lon ?? platformState.lon,
           heading_deg: pos.heading_deg ?? platformState.heading_deg,
           alt_ft: pos.alt_ft ?? platformState.alt_ft,
           speed_kts: pos.speed_kts ?? platformState.speed_kts,
+          roll_deg: pos.roll_deg ?? platformState.roll_deg,
+          pitch_deg: pos.pitch_deg ?? platformState.pitch_deg,
         }
       }
     } catch (e) {

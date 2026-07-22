@@ -17,6 +17,7 @@ Feature: o-my Platform Debrief
     And the map shows the route waypoints and task locations
     When I scrub the timeline or click play
     Then the vehicle status panel updates fuel, datalink, payload, weapons loadout, and bay/gear status in sync
+    And flight instruments show airspeed, attitude, altimeter, and heading for the scrubbed time
     And key milestones on the left highlight or scroll to the current time's events
 
   @recorder @parquet
