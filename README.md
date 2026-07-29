@@ -88,7 +88,9 @@ Docker: `docker compose up` (API :8020, UI :5173). Live Redis profile: `docker c
 
 ![Main debrief — Video badges on associated milestones (no embedded player)](docs/screenshots/06-video-association.png)
 
-![Pop-out sensor video viewer — minimal feed synced to timeline](docs/screenshots/07-video-viewer.png)
+![Pop-out sensor video viewer — overlays on + classification](docs/screenshots/07-video-viewer.png)
+
+![Pop-out viewer — overlays off (classification remains)](docs/screenshots/08-video-overlays-off.png)
 
 Refresh captures (API + Vite running):
 

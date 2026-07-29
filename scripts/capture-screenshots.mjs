@@ -96,6 +96,25 @@ async function main() {
   })
   await videoPage.waitForTimeout(1200)
   await shot(videoPage, '07-video-viewer.png')
+
+  // Overlays off — classification remains
+  await videoPage.evaluate(() => {
+    localStorage.setItem('omy-debrief-video-overlays', '0')
+  })
+  await videoPage.reload({ waitUntil: 'networkidle' })
+  await videoPage.waitForTimeout(600)
+  await videoPage.evaluate(() => {
+    const ch = new BroadcastChannel('omy-debrief-video')
+    ch.postMessage({
+      type: 'sync',
+      missionId: 'msn-demo-strike-recon',
+      currentTime: '2026-07-21T14:08:00Z',
+      playing: false,
+      clipId: 'clip-eo-042',
+    })
+  })
+  await videoPage.waitForTimeout(1000)
+  await shot(videoPage, '08-video-overlays-off.png')
   await videoPage.close()
 
   await browser.close()
