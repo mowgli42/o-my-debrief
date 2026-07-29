@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from omy_debrief import __version__
 from omy_debrief import store
@@ -14,8 +15,8 @@ from omy_debrief.models.events import DebriefEvent, Milestone, MissionManifest, 
 app = FastAPI(
     title="o-my Platform Debrief API",
     description=(
-        "Query OMS mission Parquet captures: events, milestones, and platform state-at-time. "
-        "Part of Open Arsenal o-my ecosystem."
+        "Query OMS mission Parquet captures: events, milestones, platform state-at-time, "
+        "and timeline-synced sensor video clips. Part of Open Arsenal o-my ecosystem."
     ),
     version=__version__,
 )
@@ -114,6 +115,28 @@ def summary(mission: str = Query(...)) -> dict[str, Any]:
 @app.get("/api/milestone-rules")
 def milestone_rules() -> dict[str, Any]:
     return store.load_rules()
+
+
+@app.get("/api/media")
+def media(mission: str = Query(...)) -> list[dict[str, Any]]:
+    """Sensor / FOV video clips keyed to mission time for debrief playback."""
+    try:
+        return store.list_media(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/media/file/{mission_id}/{filename}")
+def media_file(mission_id: str, filename: str) -> FileResponse:
+    try:
+        path = store.media_file_path(mission_id, filename)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return FileResponse(path, media_type="video/mp4", filename=filename)
 
 
 @app.post("/api/query")
