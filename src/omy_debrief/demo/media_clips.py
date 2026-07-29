@@ -1,7 +1,7 @@
 """Generate synthetic sensor-video clips for the demo debrief mission.
 
-Clips are short H.264 MP4s (lavfi + drawtext) keyed to mission time windows so
-the UI can scrub/play them in sync with the debrief timeline.
+Clips are short H.264 MP4s (plain sensor-colored plates) keyed to mission time
+windows. HUD text / reticle / REC live in the viewer as toggleable overlays.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 MISSION_ID = "msn-demo-strike-recon"
+DEFAULT_CLASSIFICATION = "UNCLASSIFIED"
 
 # (clip_id, sensor, label, mission_offset_min, duration_min, target)
 CLIP_SPECS: list[tuple[str, str, str, float, float, str]] = [
@@ -45,27 +46,12 @@ def _render_clip(
     out_path: Path,
     *,
     sensor: str,
-    label: str,
-    target: str,
     duration_s: float = 8.0,
 ) -> None:
-    """Render a silent synthetic sensor feed MP4 via ffmpeg lavfi."""
+    """Render a silent plate (no baked-in text — overlays are UI-only)."""
     bg = SENSOR_COLORS.get(sensor, "0x101820")
-    # Escape drawtext special chars
-    safe_label = label.replace(":", "\\:").replace("'", "")
-    safe_target = target.replace(":", "\\:")
-    vf = (
-        f"drawbox=x=iw/2-40:y=ih/2-40:w=80:h=80:color=white@0.35:t=2,"
-        f"drawgrid=w=40:h=40:t=1:c=white@0.08,"
-        f"drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf:"
-        f"text='{sensor}  {safe_target}':x=24:y=20:fontsize=22:fontcolor=white,"
-        f"drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf:"
-        f"text='{safe_label}':x=24:y=52:fontsize=14:fontcolor=0x3dd6c6,"
-        f"drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf:"
-        f"text='REC  %{{pts\\:hms}}':x=24:y=h-36:fontsize=14:fontcolor=0xff5c6c,"
-        f"drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf:"
-        f"text='HAWK-1 DEMO FEED':x=w-220:y=h-36:fontsize=12:fontcolor=white@0.7"
-    )
+    # Subtle grid only — reticle/labels are HTML overlays
+    vf = "drawgrid=w=40:h=40:t=1:c=white@0.06"
     cmd = [
         "ffmpeg",
         "-y",
@@ -84,16 +70,7 @@ def _render_clip(
         "+faststart",
         str(out_path),
     ]
-    # Fallback without custom font if fontfile missing
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        vf_simple = (
-            f"drawbox=x=iw/2-40:y=ih/2-40:w=80:h=80:color=white@0.35:t=2,"
-            f"drawtext=text='{sensor} {safe_target}':x=24:y=24:fontsize=22:fontcolor=white,"
-            f"drawtext=text='DEMO SENSOR FEED':x=24:y=h-40:fontsize=14:fontcolor=0x3dd6c6"
-        )
-        cmd[cmd.index("-vf") + 1] = vf_simple
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+    subprocess.run(cmd, check=True, capture_output=True, text=True)
 
 
 def build_media_catalog(base: datetime | None = None) -> list[dict[str, Any]]:
@@ -107,6 +84,7 @@ def build_media_catalog(base: datetime | None = None) -> list[dict[str, Any]]:
                 "sensor": sensor,
                 "label": label,
                 "target_id": target,
+                "classification": DEFAULT_CLASSIFICATION,
                 "start_time": _ts(base, start_min),
                 "end_time": _ts(base, start_min + dur_min),
                 "filename": f"{clip_id}.mp4",
@@ -125,7 +103,6 @@ def write_media(out_dir: Path, base: datetime | None = None) -> Path:
     catalog = build_media_catalog(base)
 
     if not _ffmpeg_available():
-        # Still write catalog so API works; UI falls back to canvas HUD
         for clip in catalog:
             clip["filename"] = None
             clip["url"] = None
@@ -134,16 +111,14 @@ def write_media(out_dir: Path, base: datetime | None = None) -> Path:
         catalog_path.write_text(json.dumps(catalog, indent=2) + "\n")
         return catalog_path
 
+    # Always regenerate so overlay bake-ins from older generators are cleared
     for clip in catalog:
         path = media_root / f"{clip['clip_id']}.mp4"
-        if not path.exists() or path.stat().st_size < 1000:
-            _render_clip(
-                path,
-                sensor=clip["sensor"],
-                label=clip["label"],
-                target=clip["target_id"],
-                duration_s=float(clip["duration_s"]),
-            )
+        _render_clip(
+            path,
+            sensor=clip["sensor"],
+            duration_s=float(clip["duration_s"]),
+        )
         clip["bytes"] = path.stat().st_size
 
     catalog_path = media_root / "catalog.json"

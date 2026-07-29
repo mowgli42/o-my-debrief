@@ -18,6 +18,7 @@
   let clip = $derived(
     clipById(media, preferClipId) || clipAtTime(media, currentTime),
   )
+  let classification = $derived(clip?.classification || media[0]?.classification || 'UNCLASSIFIED')
 
   onMount(async () => {
     const params = new URLSearchParams(window.location.search)
@@ -51,6 +52,6 @@
   {#if error}
     <div class="p-4 text-sm text-red-400">{error}</div>
   {:else}
-    <VideoViewer {clip} {currentTime} {playing} />
+    <VideoViewer {clip} {currentTime} {playing} {classification} />
   {/if}
 </div>

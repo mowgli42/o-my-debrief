@@ -9,7 +9,7 @@ debrief stays map / milestones / platform status only.
 | Surface | Role |
 |---------|------|
 | Main debrief | Detect `media_clip_id` / `has_video`; badge milestones & timeline dots; header chip when a clip covers the scrub time; **Open video viewer** |
-| Pop-out (`/video.html`) | Minimal feed display (label + REC). No clip list, no scrubber, no play button — syncs from the main timeline via `BroadcastChannel` |
+| Pop-out (`/video.html`) | Minimal feed. **Overlays** toggle (reticle / REC / labels). Classification badge top-left (always on). Synced via `BroadcastChannel` |
 | Catalog | `data/debrief/media/<mission>/catalog.json` + MP4s from `make fixtures` |
 | API | `GET /api/media?mission=…` · `GET /api/media/file/{mission}/{file}.mp4` |
 
@@ -22,7 +22,11 @@ OMS events carry `payload.media_clip_id`. Milestone extraction copies that onto:
 
 Timeline markers with a clip show a small collect-colored dot under the glyph.
 
-## Sync
+## Viewer chrome
+
+- **Classification** — small green badge top-left on the picture (and in the title bar); always visible.
+- **Overlays** switch — toggles reticle, sensor/target labels, REC, feed name, and clock. Preference saved in `localStorage`.
+- Demo MP4s are plain sensor-colored plates (no baked-in text) so the toggle fully controls HUD.
 
 ```
 BroadcastChannel('omy-debrief-video')
