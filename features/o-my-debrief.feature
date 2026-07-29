@@ -19,7 +19,8 @@ Feature: o-my Platform Debrief
     Then the vehicle status panel updates fuel, datalink, payload, weapons loadout, and bay/gear status in sync
     And the platform panel Mission tab stays free of flight instruments during cruise
     And the Launch / Recovery tab shows flight instruments, altitude climb/descent profile, landing gear, and aircraft systems
-    And the Sensor video tab plays timeline-synced EO/IR/SAR/strike FOV clips for collect windows
+    And milestones with associated sensor video show a Video badge without embedding a player in the main layout
+    And Open video viewer pops out a minimal timeline-synced feed window
     And key milestones on the left highlight or scroll to the current time's events
 
   @recorder @parquet

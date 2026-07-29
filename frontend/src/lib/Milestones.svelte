@@ -6,6 +6,7 @@
     currentTime = null,
     selectedEventId = null,
     onselect = undefined,
+    onopenVideo = undefined,
   } = $props()
 
   let listEl = $state(null)
@@ -23,6 +24,16 @@
       node.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     }
   })
+
+  function onMilestoneClick(m, e) {
+    // VIDEO badge opens viewer without changing selection intent oddly — still scrub first
+    if (e.target?.closest?.('[data-video-badge]')) {
+      onselect?.(m)
+      onopenVideo?.()
+      return
+    }
+    onselect?.(m)
+  }
 </script>
 
 <aside class="panel flex h-full min-h-0 flex-col rounded-sm overflow-hidden">
@@ -43,13 +54,23 @@
         class:border-[var(--line)]={!isActive(m)}
         class:ring-1={selectedEventId === m.event_id}
         class:ring-[var(--accent)]={selectedEventId === m.event_id}
-        onclick={() => onselect?.(m)}
+        onclick={(e) => onMilestoneClick(m, e)}
       >
         <div class="flex items-center gap-2 text-xs text-[var(--muted)]">
           <span
             style={`color:${m.marker === 'caret' ? 'var(--strike)' : m.marker === 'flag' ? 'var(--verify)' : m.marker === 'diamond' ? 'var(--collect)' : 'var(--muted)'}`}
           >{markerGlyph(m.marker)}</span>
           <span class="mono">{formatTime(m.timestamp)}</span>
+          {#if m.has_video}
+            <span
+              data-video-badge
+              class="rounded px-1 py-0.5 text-[9px] uppercase tracking-wider text-[var(--collect)]"
+              style="background:rgba(77,163,255,0.15)"
+              title="Associated sensor video — click to open viewer"
+            >
+              Video
+            </span>
+          {/if}
           <span
             class="ml-auto rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider"
             class:bg-[rgba(93,222,160,0.15)]={m.status === 'completed' || m.status === 'VERIFIED' || m.status === 'EXECUTED' || m.status === 'success' || m.status === 'delivered'}

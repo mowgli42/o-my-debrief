@@ -25,6 +25,7 @@
       .map((e) => ({
         ...e,
         pct: ((toMs(e.timestamp) - startMs) / span) * 100,
+        hasVideo: Boolean(e.payload?.media_clip_id),
         color:
           e.marker === 'diamond'
             ? sensorColor(e.sensor)
@@ -101,7 +102,7 @@
         class:drop-shadow-[0_0_8px_rgba(255,122,69,0.9)]={m.highlighted && m.marker === 'caret'}
         class:drop-shadow-[0_0_8px_rgba(61,214,198,0.9)]={m.highlighted && m.marker !== 'caret'}
         style={`left:${m.pct}%; color:${m.color}; ${m.highlighted ? 'outline:2px solid var(--accent); outline-offset:2px; border-radius:2px;' : ''}`}
-        title={`${formatTime(m.timestamp)} — ${m.summary}`}
+        title={`${formatTime(m.timestamp)} — ${m.summary}${m.hasVideo ? ' · video' : ''}`}
         data-event-id={m.event_id}
         aria-current={m.highlighted ? 'true' : undefined}
         onclick={(ev) => {
@@ -110,6 +111,12 @@
         }}
       >
         {markerGlyph(m.marker)}
+        {#if m.hasVideo}
+          <span
+            class="absolute -bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-[var(--collect)]"
+            aria-hidden="true"
+          ></span>
+        {/if}
       </button>
     {/each}
 
