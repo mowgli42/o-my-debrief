@@ -1,41 +1,44 @@
-# Sensor video playback (timeline-synced)
+# Sensor video playback (separate viewer)
 
-Debrief stations scrub mission time like a video player. This feature binds
-**sensor / FOV clips** to mission time windows so Play and scrub drive both the
-map and the sensor feed.
+Debrief import **identifies** events/milestones that have associated sensor video.
+Playback itself runs in a **separate pop-out window** with almost no chrome — the main
+debrief stays map / milestones / platform status only.
 
 ## Concept
 
-| Piece | Role |
-|-------|------|
-| Demo catalog | `data/debrief/media/<mission>/catalog.json` — clip id, sensor, start/end ISO, MP4 filename |
-| Demo MP4s | Synthetic lavfi clips (EO / IR / SAR / strike FOV) rendered by `ffmpeg` during `make fixtures` |
+| Surface | Role |
+|---------|------|
+| Main debrief | Detect `media_clip_id` / `has_video`; badge milestones & timeline dots; header chip when a clip covers the scrub time; **Open video viewer** |
+| Pop-out (`/video.html`) | Minimal feed display (label + REC). No clip list, no scrubber, no play button — syncs from the main timeline via `BroadcastChannel` |
+| Catalog | `data/debrief/media/<mission>/catalog.json` + MP4s from `make fixtures` |
 | API | `GET /api/media?mission=…` · `GET /api/media/file/{mission}/{file}.mp4` |
-| UI | Center panel **Sensor video** tab — active clip follows scrub; clip list jumps timeline |
 
-Collect and strike events carry `payload.media_clip_id` linking OMS messages to clips.
+## Association
 
-## Demo clips (HAWK-1)
+OMS events carry `payload.media_clip_id`. Milestone extraction copies that onto:
 
-| Clip | Sensor | Window (mission clock) |
-|------|--------|------------------------|
-| `clip-eo-042` | EO | Collect on TGT-042 |
-| `clip-ir-042` | IR | Thermal collect |
-| `clip-sar-055` | SAR | Strip on TGT-055 |
-| `clip-eo-055` | EO | Revisit TGT-055 |
-| `clip-strike-042` | EO | Strike FOV STRK-01 |
-| `clip-bda-eo-042` / `clip-bda-ir-042` | EO / IR | Post-strike BDA |
+- `has_video: true`
+- `media_clip_id: "clip-eo-042"`
 
-## Sync rule
+Timeline markers with a clip show a small collect-colored dot under the glyph.
+
+## Sync
 
 ```
-video.currentTime = (missionNow − clip.start) / (clip.end − clip.start) × video.duration
+BroadcastChannel('omy-debrief-video')
+  main → { type: 'sync', missionId, currentTime, playing, clipId }
+  pop-out → { type: 'hello' }  // requests immediate sync
 ```
 
-While **Play** is active the debrief clock advances and the `<video>` element seeks/plays in lockstep. Outside any clip window the panel shows “No sensor feed” and the clip list remains available.
+Seek rule in the viewer:
+
+```
+video.currentTime = (missionNow − clip.start) / (clip.end − clip.start) × duration
+```
 
 ## Code
 
-- Generator: `src/omy_debrief/demo/media_clips.py` (called from `demo/generate.py`)
-- Store: `store.list_media` / `store.media_file_path`
-- UI: `frontend/src/lib/SensorVideo.svelte`
+- Generator: `src/omy_debrief/demo/media_clips.py`
+- Milestone fields: `models/events.py` · `store._media_fields`
+- Main: `App.svelte` header chip + `Milestones` VIDEO badge
+- Viewer: `frontend/video.html` · `VideoApp.svelte` · `VideoViewer.svelte`

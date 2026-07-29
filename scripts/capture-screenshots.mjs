@@ -1,7 +1,6 @@
 /**
  * Capture debrief UI into docs/screenshots/
  * Requires API (:8020 default) and Vite (:5173 default).
- * Shows both platform tabs: Mission and Launch / Recovery.
  */
 import { chromium } from 'playwright'
 import path from 'path'
@@ -37,7 +36,6 @@ async function main() {
   await page.waitForSelector('text=Key milestones', { timeout: 30000 })
   await page.waitForTimeout(1200)
 
-  // Mid-mission overview on Mission tab (ops, no instruments)
   const play = page.getByRole('button', { name: 'Play' })
   if (await play.count()) {
     await play.click()
@@ -48,11 +46,8 @@ async function main() {
   await selectTab(page, /Mission/i)
   await page.waitForTimeout(400)
   await shot(page, '01-debrief-overview.png')
-
-  await page.waitForTimeout(300)
   await shot(page, '02-timeline-scrub.png')
 
-  // Strike milestone — Mission tab (weapons / tasks)
   const strike = page.getByRole('button').filter({ hasText: /Strike EXECUTED/i }).first()
   if (await strike.count()) {
     await strike.click()
@@ -62,7 +57,6 @@ async function main() {
   await page.waitForTimeout(400)
   await shot(page, '03-strike-milestone.png')
 
-  // Dedicated Mission tab shot at BDA time
   const bda = page.getByRole('button').filter({ hasText: /BDA/i }).first()
   if (await bda.count()) {
     await bda.click()
@@ -72,23 +66,37 @@ async function main() {
   await page.waitForTimeout(500)
   await shot(page, '04-mission-tab.png')
 
-  // Same scrub time — Launch / Recovery tab (profile + gear + instruments)
   await selectTab(page, /Launch\s*\/\s*Recovery/i)
   await page.waitForTimeout(800)
   await shot(page, '05-launch-recovery-tab.png')
 
-  // Sensor video tab — jump to an EO collect milestone
+  // Video association on main debrief (badges, no embedded player)
   const collect = page.getByRole('button').filter({ hasText: /EO collect/i }).first()
   if (await collect.count()) {
     await collect.click()
-    await page.waitForTimeout(1000)
+    await page.waitForTimeout(800)
   }
-  const videoTab = page.getByRole('tab', { name: /Sensor video/i })
-  if (await videoTab.count()) {
-    await videoTab.click()
-    await page.waitForTimeout(1000)
-  }
-  await shot(page, '06-sensor-video.png')
+  await shot(page, '06-video-association.png')
+
+  // Pop-out video viewer page (minimal)
+  const mission = 'msn-demo-strike-recon'
+  const videoPage = await browser.newPage({ viewport: { width: 720, height: 420 } })
+  await videoPage.goto(`${BASE}/video.html?mission=${mission}`, { waitUntil: 'networkidle' })
+  await videoPage.waitForTimeout(800)
+  // Nudge via BroadcastChannel from a tiny evaluate after loading media
+  await videoPage.evaluate(() => {
+    const ch = new BroadcastChannel('omy-debrief-video')
+    ch.postMessage({
+      type: 'sync',
+      missionId: 'msn-demo-strike-recon',
+      currentTime: '2026-07-21T14:08:00Z',
+      playing: false,
+      clipId: 'clip-eo-042',
+    })
+  })
+  await videoPage.waitForTimeout(1200)
+  await shot(videoPage, '07-video-viewer.png')
+  await videoPage.close()
 
   await browser.close()
   console.log('done')

@@ -8,7 +8,7 @@ Captures live or simulated OMS bus messages from o-my Redis topics, persists the
 - Stacked key milestones (left) — scrollable; selection highlights timeline event
 - Route / task map (center) — strike points as down carets
 - Vehicle status at scrub time — Mission / Launch-Recovery tabs, flight instruments, altitude profile
-- **Sensor video** — timeline-synced EO/IR/SAR/strike FOV clips (center panel tab)
+- **Sensor video** — main debrief flags associated clips; playback is a separate minimal pop-out (`/video.html`)
 
 ---
 
@@ -30,7 +30,7 @@ Captures live or simulated OMS bus messages from o-my Redis topics, persists the
 | Platform panel: waypoint, tasks, gear/bay/weapons icons | Shipped |
 | Flight instruments (ASI / attitude / altimeter / HDG) | Shipped (Launch / Recovery tab) |
 | Launch / Recovery altitude profile + gear/systems | Shipped |
-| Sensor video playback (timeline-synced FOV clips) | Shipped |
+| Sensor video playback (timeline-synced FOV clips) | Shipped (separate pop-out viewer) |
 | Unit tests (`make test`) | Shipped (13) |
 | Screenshots | Shipped (`docs/screenshots/`) |
 
@@ -59,7 +59,7 @@ Open **http://127.0.0.1:5173**
 
 1. Mission **Demo Strike-Recon (HAWK-1)** loads automatically  
 2. Scrub the timeline or hit **Play**  
-3. Click a milestone (e.g. EO collect) — **Sensor video** tab opens with the synced FOV clip  
+3. Click a milestone with a **Video** badge — scrub syncs; **Open video viewer** for the pop-out feed  
 4. **Export Debrief Report** downloads a JSON after-action bundle  
 
 API smoke:
@@ -86,7 +86,9 @@ Docker: `docker compose up` (API :8020, UI :5173). Live Redis profile: `docker c
 
 ![Launch / Recovery tab — altitude profile, gear/systems, flight instruments](docs/screenshots/05-launch-recovery-tab.png)
 
-![Sensor video — timeline-synced EO collect FOV clip](docs/screenshots/06-sensor-video.png)
+![Main debrief — Video badges on associated milestones (no embedded player)](docs/screenshots/06-video-association.png)
+
+![Pop-out sensor video viewer — minimal feed synced to timeline](docs/screenshots/07-video-viewer.png)
 
 Refresh captures (API + Vite running):
 

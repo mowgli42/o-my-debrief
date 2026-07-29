@@ -52,6 +52,9 @@ class Milestone(BaseModel):
     linked_to_strike: bool = False
     linked_strike_event_id: str | None = None
     link_note: str | None = None
+    # Associated sensor/FOV video (from event payload.media_clip_id)
+    has_video: bool = False
+    media_clip_id: str | None = None
 
 
 class TaskStatusEntry(BaseModel):

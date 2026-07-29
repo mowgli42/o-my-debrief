@@ -145,6 +145,13 @@ def _positive_bda(ev: DebriefEvent, rule: dict[str, Any]) -> bool:
     return False
 
 
+def _media_fields(ev: DebriefEvent) -> dict[str, Any]:
+    clip = (ev.payload or {}).get("media_clip_id")
+    if clip:
+        return {"has_video": True, "media_clip_id": str(clip)}
+    return {"has_video": False, "media_clip_id": None}
+
+
 def _build_from_rule(ev: DebriefEvent, rule: dict[str, Any]) -> Milestone:
     kind = rule["kind"]
     if kind == "bda" and _positive_bda(ev, rule):
@@ -166,6 +173,7 @@ def _build_from_rule(ev: DebriefEvent, rule: dict[str, Any]) -> Milestone:
         lat=ev.lat,
         lon=ev.lon,
         target_id=ev.target_id,
+        **_media_fields(ev),
     )
 
 
@@ -224,6 +232,7 @@ def _fallback_milestone(ev: DebriefEvent) -> Milestone | None:
         lat=ev.lat,
         lon=ev.lon,
         target_id=ev.target_id,
+        **_media_fields(ev),
     )
 
 

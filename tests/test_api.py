@@ -67,6 +67,9 @@ def test_milestones_yaml_and_bda_link(client: TestClient) -> None:
     assert bdas
     assert any(m.get("linked_to_strike") for m in bdas)
     assert any(m.get("linked_strike_event_id") for m in bdas)
+    # Associated sensor video flagged on collects / strike FOV
+    video_ms = [m for m in ms if m.get("has_video") and m.get("media_clip_id")]
+    assert len(video_ms) >= 3
 
 
 def test_state_at(client: TestClient) -> None:
