@@ -551,3 +551,28 @@ def mission_summary(mission_id: str) -> dict[str, Any]:
         "generator": "rule-based",
         "llm_hook": "Set DEBRIEF_LLM_SUMMARY=1 and provide adapter to replace narrative (future).",
     }
+
+
+def list_media(mission_id: str) -> list[dict[str, Any]]:
+    """Timeline-synced sensor video clips for a mission (demo catalog)."""
+    # Ensure mission exists
+    _read_table(mission_id)
+    catalog = data_dir() / "media" / mission_id / "catalog.json"
+    if not catalog.exists():
+        return []
+    raw = json.loads(catalog.read_text())
+    return raw if isinstance(raw, list) else []
+
+
+def media_file_path(mission_id: str, filename: str) -> Path:
+    """Resolve a media file under data_dir/media/<mission>/; reject path traversal."""
+    safe = Path(filename).name
+    if safe != filename or ".." in filename or "/" in filename or "\\" in filename:
+        raise ValueError("Invalid media filename")
+    path = (data_dir() / "media" / mission_id / safe).resolve()
+    root = (data_dir() / "media" / mission_id).resolve()
+    if not str(path).startswith(str(root) + os.sep) and path != root:
+        raise ValueError("Media path escape")
+    if not path.is_file():
+        raise FileNotFoundError(safe)
+    return path

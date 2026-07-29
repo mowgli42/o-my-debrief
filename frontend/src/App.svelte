@@ -4,8 +4,10 @@
   import Milestones from './lib/Milestones.svelte'
   import MissionMap from './lib/MissionMap.svelte'
   import VehicleStatus from './lib/VehicleStatus.svelte'
+  import SensorVideo from './lib/SensorVideo.svelte'
   import {
     fetchEvents,
+    fetchMedia,
     fetchMilestones,
     fetchMissions,
     fetchPositionAt,
@@ -24,6 +26,7 @@
   let milestones = $state([])
   let waypoints = $state([])
   let track = $state([])
+  let media = $state([])
   let platformState = $state(null)
   let position = $state(null)
   let currentTime = $state(null)
@@ -33,22 +36,26 @@
   let summaryOpen = $state(false)
   let summaryText = $state('')
   let selectedEventId = $state(null)
+  /** @type {'map' | 'video'} */
+  let centerTab = $state('map')
   let playTimer = null
 
   async function loadMission(id) {
     loading = true
     error = ''
     try {
-      const [ev, ms, wp, tr] = await Promise.all([
+      const [ev, ms, wp, tr, md] = await Promise.all([
         fetchEvents(id),
         fetchMilestones(id),
         fetchWaypoints(id),
         fetchTrack(id),
+        fetchMedia(id).catch(() => []),
       ])
       events = ev
       milestones = ms
       waypoints = wp
       track = tr
+      media = md
       const m = missions.find((x) => x.mission_id === id)
       currentTime = m?.start_time || ev[0]?.timestamp
       await refreshState()
@@ -94,6 +101,22 @@
 
   function selectMilestone(m) {
     scrub(m.timestamp, m.event_id || null)
+    // Jump to sensor video when scrubbing into a clip window
+    const t = toMs(m.timestamp)
+    if (
+      media.some((c) => {
+        const a = toMs(c.start_time)
+        const b = toMs(c.end_time)
+        return t >= a && t <= b
+      })
+    ) {
+      centerTab = 'video'
+    }
+  }
+
+  function selectMediaClip(clip) {
+    scrub(clip.start_time, null)
+    centerTab = 'video'
   }
 
   function togglePlay() {
@@ -256,16 +279,60 @@
         onselect={selectMilestone}
       />
     </div>
-    <div class="min-h-0 lg:col-span-6">
-      <MissionMap
-        {waypoints}
-        {events}
-        {track}
-        platform={platformState}
-        {position}
-        {currentTime}
-        highlightEventId={selectedEventId}
-      />
+    <div class="flex min-h-0 flex-col gap-2 lg:col-span-6">
+      <div class="flex shrink-0 gap-1" role="tablist" aria-label="Center panel">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={centerTab === 'map'}
+          class="rounded-sm border px-3 py-1 text-[11px] uppercase tracking-wider"
+          class:border-[var(--accent)]={centerTab === 'map'}
+          class:bg-[rgba(61,214,198,0.12)]={centerTab === 'map'}
+          class:text-[var(--accent)]={centerTab === 'map'}
+          class:border-[var(--line)]={centerTab !== 'map'}
+          class:text-[var(--muted)]={centerTab !== 'map'}
+          onclick={() => (centerTab = 'map')}
+        >
+          Route map
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={centerTab === 'video'}
+          class="rounded-sm border px-3 py-1 text-[11px] uppercase tracking-wider"
+          class:border-[var(--accent)]={centerTab === 'video'}
+          class:bg-[rgba(61,214,198,0.12)]={centerTab === 'video'}
+          class:text-[var(--accent)]={centerTab === 'video'}
+          class:border-[var(--line)]={centerTab !== 'video'}
+          class:text-[var(--muted)]={centerTab !== 'video'}
+          onclick={() => (centerTab = 'video')}
+        >
+          Sensor video
+          {#if media.length}
+            <span class="ml-1 mono text-[10px] opacity-80">({media.length})</span>
+          {/if}
+        </button>
+      </div>
+      <div class="min-h-0 flex-1">
+        {#if centerTab === 'map'}
+          <MissionMap
+            {waypoints}
+            {events}
+            {track}
+            platform={platformState}
+            {position}
+            {currentTime}
+            highlightEventId={selectedEventId}
+          />
+        {:else}
+          <SensorVideo
+            {media}
+            {currentTime}
+            {playing}
+            onselectClip={selectMediaClip}
+          />
+        {/if}
+      </div>
     </div>
     <div class="min-h-0 lg:col-span-3">
       <VehicleStatus platform={platformState} {track} {currentTime} />

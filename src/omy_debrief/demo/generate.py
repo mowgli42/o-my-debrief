@@ -11,6 +11,7 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from omy_debrief.demo.media_clips import write_media
 from omy_debrief.models.events import DebriefEvent
 
 MISSION_ID = "msn-demo-strike-recon"
@@ -149,16 +150,16 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
             marker="circle",
         )
 
-    # Sensor collects (diamonds)
+    # Sensor collects (diamonds) — each links a timeline-synced sensor video clip
     collects = [
-        (8.0, WAYPOINTS[2][0], WAYPOINTS[2][1], "EO", "TGT-042", "EO collected 3-image set on TGT-042"),
-        (10.5, 36.94, 35.74, "IR", "TGT-042", "IR collect on TGT-042 (thermal)"),
-        (12.0, WAYPOINTS[3][0], WAYPOINTS[3][1], "SAR", "TGT-055", "SAR strip collect on TGT-055"),
-        (14.5, 37.00, 35.88, "EO", "TGT-055", "EO revisit on TGT-055"),
-        (22.0, WAYPOINTS[6][0], WAYPOINTS[6][1], "EO", "TGT-042", "Post-strike EO BDA collect on TGT-042"),
-        (24.0, 37.02, 36.18, "IR", "TGT-042", "IR BDA confirmation pass"),
+        (8.0, WAYPOINTS[2][0], WAYPOINTS[2][1], "EO", "TGT-042", "EO collected 3-image set on TGT-042", "clip-eo-042"),
+        (10.5, 36.94, 35.74, "IR", "TGT-042", "IR collect on TGT-042 (thermal)", "clip-ir-042"),
+        (12.0, WAYPOINTS[3][0], WAYPOINTS[3][1], "SAR", "TGT-055", "SAR strip collect on TGT-055", "clip-sar-055"),
+        (14.5, 37.00, 35.88, "EO", "TGT-055", "EO revisit on TGT-055", "clip-eo-055"),
+        (22.0, WAYPOINTS[6][0], WAYPOINTS[6][1], "EO", "TGT-042", "Post-strike EO BDA collect on TGT-042", "clip-bda-eo-042"),
+        (24.0, 37.02, 36.18, "IR", "TGT-042", "IR BDA confirmation pass", "clip-bda-ir-042"),
     ]
-    for minutes, lat, lon, sensor, tgt, summary in collects:
+    for minutes, lat, lon, sensor, tgt, summary, clip_id in collects:
         add(
             minutes=minutes,
             event_type="sensorCollect",
@@ -174,6 +175,7 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
                 "images": 3 if sensor == "EO" else 1,
                 "size_gb": 2.1 if sensor == "EO" else 0.4,
                 "mode": "spot",
+                "media_clip_id": clip_id,
             },
         )
 
@@ -227,6 +229,7 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
             "munitions_released": ["GBU-39", "GBU-39"],
             "weapons_bay": "open",
             "effects_reported": True,
+            "media_clip_id": "clip-strike-042",
         },
     )
 
@@ -314,6 +317,9 @@ def write_mission(out_dir: Path, events: list[dict[str, Any]] | None = None) -> 
         for row in events:
             f.write(json.dumps(row) + "\n")
 
+    media_catalog = write_media(out_dir)
+    print(f"Wrote media catalog {media_catalog}")
+
     return parquet_path
 
 
@@ -322,7 +328,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--out", type=Path, default=Path("data/debrief"))
     args = parser.parse_args(argv)
     path = write_mission(args.out)
-    print(f"Wrote {path} (+ manifest.json, jsonl)")
+    print(f"Wrote {path} (+ manifest.json, jsonl, media clips)")
 
 
 if __name__ == "__main__":

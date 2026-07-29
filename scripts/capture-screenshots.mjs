@@ -77,6 +77,19 @@ async function main() {
   await page.waitForTimeout(800)
   await shot(page, '05-launch-recovery-tab.png')
 
+  // Sensor video tab — jump to an EO collect milestone
+  const collect = page.getByRole('button').filter({ hasText: /EO collect/i }).first()
+  if (await collect.count()) {
+    await collect.click()
+    await page.waitForTimeout(1000)
+  }
+  const videoTab = page.getByRole('tab', { name: /Sensor video/i })
+  if (await videoTab.count()) {
+    await videoTab.click()
+    await page.waitForTimeout(1000)
+  }
+  await shot(page, '06-sensor-video.png')
+
   await browser.close()
   console.log('done')
 }

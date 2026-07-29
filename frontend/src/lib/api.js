@@ -42,6 +42,10 @@ export function fetchSummary(mission) {
   return get(`/api/summary?mission=${encodeURIComponent(mission)}`)
 }
 
+export function fetchMedia(mission) {
+  return get(`/api/media?mission=${encodeURIComponent(mission)}`)
+}
+
 export function sensorColor(sensor) {
   const s = (sensor || '').toUpperCase()
   if (s === 'EO') return '#4da3ff'

@@ -7,7 +7,8 @@ Captures live or simulated OMS bus messages from o-my Redis topics, persists the
 - Interactive timeline — **◆** sensor collects, **▼** strike tasks, **⚑** BDA
 - Stacked key milestones (left) — scrollable; selection highlights timeline event
 - Route / task map (center) — strike points as down carets
-- Vehicle status at scrub time — flight instruments (airspeed / attitude / altimeter / heading), waypoint, assigned tasks, fuel, datalink, payload, weapons / gear / bay icons
+- Vehicle status at scrub time — Mission / Launch-Recovery tabs, flight instruments, altitude profile
+- **Sensor video** — timeline-synced EO/IR/SAR/strike FOV clips (center panel tab)
 
 ---
 
@@ -29,10 +30,11 @@ Captures live or simulated OMS bus messages from o-my Redis topics, persists the
 | Platform panel: waypoint, tasks, gear/bay/weapons icons | Shipped |
 | Flight instruments (ASI / attitude / altimeter / HDG) | Shipped (Launch / Recovery tab) |
 | Launch / Recovery altitude profile + gear/systems | Shipped |
-| Unit tests (`make test`) | Shipped (12) |
+| Sensor video playback (timeline-synced FOV clips) | Shipped |
+| Unit tests (`make test`) | Shipped (13) |
 | Screenshots | Shipped (`docs/screenshots/`) |
 
-Living spec: [`openspec/specs/o-my-debrief/spec.md`](openspec/specs/o-my-debrief/spec.md) · Gherkin: [`features/o-my-debrief.feature`](features/o-my-debrief.feature) · Beads: [`BEADS.md`](BEADS.md) · Grok notes: [`docs/GROK-TASKS.md`](docs/GROK-TASKS.md) · Classifier design: [`docs/MILESTONE-CLASSIFIER.md`](docs/MILESTONE-CLASSIFIER.md) · o-my-sim: [`docs/OMY-SIM-INTEGRATION.md`](docs/OMY-SIM-INTEGRATION.md) · Flight instruments: [`docs/FLIGHT-INDICATORS.md`](docs/FLIGHT-INDICATORS.md)
+Living spec: [`openspec/specs/o-my-debrief/spec.md`](openspec/specs/o-my-debrief/spec.md) · Gherkin: [`features/o-my-debrief.feature`](features/o-my-debrief.feature) · Beads: [`BEADS.md`](BEADS.md) · Grok notes: [`docs/GROK-TASKS.md`](docs/GROK-TASKS.md) · Classifier design: [`docs/MILESTONE-CLASSIFIER.md`](docs/MILESTONE-CLASSIFIER.md) · o-my-sim: [`docs/OMY-SIM-INTEGRATION.md`](docs/OMY-SIM-INTEGRATION.md) · Flight instruments: [`docs/FLIGHT-INDICATORS.md`](docs/FLIGHT-INDICATORS.md) · Sensor video: [`docs/VIDEO-PLAYBACK.md`](docs/VIDEO-PLAYBACK.md)
 
 GitHub issues (mirrored from beads): [#2](https://github.com/mowgli42/o-my-debrief/issues/2) [#3](https://github.com/mowgli42/o-my-debrief/issues/3) [#4](https://github.com/mowgli42/o-my-debrief/issues/4) [#5](https://github.com/mowgli42/o-my-debrief/issues/5)
 
@@ -57,7 +59,7 @@ Open **http://127.0.0.1:5173**
 
 1. Mission **Demo Strike-Recon (HAWK-1)** loads automatically  
 2. Scrub the timeline or hit **Play**  
-3. Click a milestone (e.g. Strike EXECUTED) — map + vehicle panel sync  
+3. Click a milestone (e.g. EO collect) — **Sensor video** tab opens with the synced FOV clip  
 4. **Export Debrief Report** downloads a JSON after-action bundle  
 
 API smoke:
@@ -83,6 +85,8 @@ Docker: `docker compose up` (API :8020, UI :5173). Live Redis profile: `docker c
 ![Mission tab — waypoint, fuel, payload, weapons, assigned tasks](docs/screenshots/04-mission-tab.png)
 
 ![Launch / Recovery tab — altitude profile, gear/systems, flight instruments](docs/screenshots/05-launch-recovery-tab.png)
+
+![Sensor video — timeline-synced EO collect FOV clip](docs/screenshots/06-sensor-video.png)
 
 Refresh captures (API + Vite running):
 

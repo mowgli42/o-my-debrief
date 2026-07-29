@@ -122,6 +122,23 @@ def test_milestone_rules(client: TestClient) -> None:
     assert "rules" in r.json()
 
 
+def test_media_catalog_and_file(client: TestClient, data_root: Path) -> None:
+    r = client.get(f"/api/media?mission={MISSION_ID}")
+    assert r.status_code == 200
+    clips = r.json()
+    assert len(clips) >= 5
+    assert all(c.get("clip_id") and c.get("start_time") for c in clips)
+    # MP4 rendered when ffmpeg is available
+    first = clips[0]
+    if first.get("filename"):
+        f = client.get(f"/api/media/file/{MISSION_ID}/{first['filename']}")
+        assert f.status_code == 200
+        assert f.headers["content-type"].startswith("video/")
+        assert len(f.content) > 500
+    catalog = data_root / "media" / MISSION_ID / "catalog.json"
+    assert catalog.is_file()
+
+
 def test_query_post(client: TestClient) -> None:
     r = client.post(
         "/api/query",
