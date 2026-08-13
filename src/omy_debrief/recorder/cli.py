@@ -23,6 +23,15 @@ DEFAULT_TOPICS = [
     "uci.commlink.status",
     "uci.platform.route",
     "uci.oms.state",
+    "uci.mission.plan",
+    "uci.route.plan",
+    "uci.task.plan",
+    "uci.mission.plan.execution",
+    "uci.task.command",
+    "uci.oob",
+    "uci.eob.working",
+    "uci.prioritization",
+    "uci.dmpi",
 ]
 
 

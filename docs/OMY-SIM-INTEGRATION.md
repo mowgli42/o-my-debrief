@@ -11,6 +11,11 @@ Aligned with `o-my-sim` `uci_common.topics` and debrief `DEFAULT_TOPICS`:
 | `uci.signal.report` | sensor / feed publishers | `sensorCollect` (heuristic) |
 | `uci.commlink.status` | commlink sims | `dissemination` / other |
 | `uci.engagement.result` | BDA / engagement | `bda` / other |
+| `uci.platform.route` | route publishers | route geometry |
+| `uci.mission.plan` / `uci.route.plan` / `uci.mission.plan.execution` | planner / sim / o-my plan-monitor | planned vs actual AAR |
+| `uci.oob` / `uci.eob.working` | fuzzy-reconciler / planner | EOB snapshot |
+| `uci.prioritization` / `uci.dmpi` | o-my / planner | F2T2EA Target phase |
+| `uci.task.command` | battlespace-manager | in-mission retask |
 | `uci.scenario.clock` | scenario clock | optional sync (future) |
 
 ## XML fidelity
