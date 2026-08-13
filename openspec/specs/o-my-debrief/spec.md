@@ -34,6 +34,10 @@ The recorder SHALL subscribe to configurable Redis topics/channels from an o-my 
 - dissemination / dataLink events
 - BDA / verification reports
 - Other relevant: waypoint progress, payload status, weapons inventory changes
+- Mission plan thread: `uci.mission.plan`, `uci.route.plan`, `uci.task.plan`, `uci.mission.plan.execution`, `uci.task.command`
+- EOB / F2T2EA catalog: `uci.oob`, `uci.eob.working`, `uci.prioritization`, `uci.dmpi`
+
+Field tables: o-my-mission-plan `docs/UCI-CONTRACTS.md` hop 6. Persist `MessageType`, `CorrelationID`, `MissionPlanID` when present.
 
 It SHALL parse messages according to the OMS/UCI schema (reference o-my and o-my-sim definitions), enrich with receive timestamp if needed, and append to time-partitioned Parquet datasets (e.g., dataset root partitioned by mission_id/date/hour or flat with metadata columns for efficient filtering).
 
