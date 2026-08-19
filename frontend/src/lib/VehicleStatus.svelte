@@ -11,9 +11,18 @@
 
   let fuel = $derived(platform?.fuel_percent ?? 0)
   let fuelColor = $derived(
-    fuel > 60 ? 'var(--verify)' : fuel > 35 ? 'var(--warn)' : 'var(--danger)',
+    fuel <= 5 ? 'var(--danger)' : fuel <= 15 ? 'var(--warn)' : 'var(--verify)',
+  )
+  let readiness = $derived((platform?.readiness || 'GREEN').toUpperCase())
+  let readinessColor = $derived(
+    readiness === 'RED'
+      ? 'var(--danger)'
+      : readiness === 'YELLOW' || readiness === 'AMBER'
+        ? 'var(--warn)'
+        : 'var(--verify)',
   )
   let gearDown = $derived((platform?.gear || '').toLowerCase() === 'down')
+  let weaponRows = $derived(Object.entries(platform?.weapons || {}))
 
   // Soft nudge: when gear is down and user hasn't chosen a tab, open Launch/Recovery
   $effect(() => {
@@ -41,8 +50,14 @@
     <h2 class="text-sm font-semibold tracking-[0.12em] uppercase text-[var(--accent)]">
       Platform status
     </h2>
-    <div class="mono text-xs text-[var(--muted)]">
-      {platform?.callsign || '—'} · {formatTime(platform?.timestamp)}
+    <div class="mono flex items-center gap-2 text-xs text-[var(--muted)]">
+      <span
+        class="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/40"
+        style={`background:${platform ? readinessColor : 'var(--muted)'}`}
+        title={`Readiness ${platform ? readiness : 'unknown'}`}
+        aria-label={`Readiness ${platform ? readiness : 'unknown'}`}
+      ></span>
+      <span>{platform?.callsign || '—'} · {formatTime(platform?.timestamp)}</span>
     </div>
 
     <div class="mt-2 flex gap-1" role="tablist" aria-label="Platform panel views">
@@ -105,14 +120,14 @@
         </div>
       </section>
 
-      <section>
-        <div class="mb-1 flex justify-between text-xs uppercase tracking-wider text-[var(--muted)]">
-          <span>Fuel</span>
-          <span class="mono" style={`color:${fuelColor}`}>{fuel.toFixed(1)}%</span>
-        </div>
-        <div class="h-2 overflow-hidden rounded-sm bg-[var(--bg-deep)]">
-          <div class="h-full transition-all duration-300" style={`width:${fuel}%; background:${fuelColor}`}></div>
-        </div>
+      <section class="flex items-center justify-between gap-2">
+        <span class="text-xs uppercase tracking-wider text-[var(--muted)]">Fuel</span>
+        <span
+          class="mono rounded-full border px-2 py-0.5 text-xs font-semibold"
+          style={`color:${fuelColor}; border-color:${fuelColor}; background:color-mix(in srgb, ${fuelColor} 16%, transparent)`}
+        >
+          {fuel.toFixed(1)}%
+        </span>
       </section>
 
       <section class="grid grid-cols-2 gap-2">
@@ -128,7 +143,14 @@
         </div>
         <div class="rounded-sm border border-[var(--line)] bg-[var(--bg-deep)] p-2">
           <div class="text-[10px] uppercase tracking-wider text-[var(--muted)]">Readiness</div>
-          <div class="mt-1 text-sm font-semibold text-[var(--verify)]">{platform.readiness}</div>
+          <div class="mt-1 flex items-center gap-2 text-sm font-semibold" style={`color:${readinessColor}`}>
+            <span
+              class="inline-block h-2 w-2 rounded-full"
+              style={`background:${readinessColor}`}
+              aria-hidden="true"
+            ></span>
+            {platform.readiness}
+          </div>
         </div>
       </section>
 
@@ -153,16 +175,20 @@
           </svg>
           <span>Weapons</span>
         </div>
-        <ul class="mt-1 space-y-1 text-sm">
-          {#each Object.entries(platform.weapons || {}) as [name, qty]}
-            <li class="flex items-center justify-between mono gap-2">
-              <span class="flex items-center gap-1.5">
-                <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M3 12h14l4-3v6l-4-3H3z" fill="var(--strike)" opacity="0.85" />
-                </svg>
-                {name}
-              </span>
-              <span>{qty}</span>
+        <ul class="mt-1 space-y-0.5 text-sm">
+          {#each weaponRows as [name, qty], i}
+            <li
+              class="mono flex items-center gap-2 rounded-sm px-1.5 py-1"
+              style={i % 2 === 0
+                ? 'background:rgba(255,122,69,0.08)'
+                : 'background:rgba(255,255,255,0.04)'}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" class="shrink-0" aria-hidden="true">
+                <path d="M3 12h14l4-3v6l-4-3H3z" fill="var(--strike)" opacity="0.85" />
+              </svg>
+              <span class="tabular-nums text-[var(--strike)]">{qty}</span>
+              <span class="text-[var(--muted)]">×</span>
+              <span>{name}</span>
             </li>
           {:else}
             <li class="text-xs text-[var(--muted)]">No loadout data</li>
@@ -273,7 +299,12 @@
         <ul class="space-y-1.5 text-sm">
           <li class="flex items-center justify-between gap-2">
             <span class="text-[var(--muted)]">Fuel</span>
-            <span class="mono font-semibold" style={`color:${fuelColor}`}>{fuel.toFixed(1)}%</span>
+            <span
+              class="mono rounded-full border px-2 py-0.5 text-xs font-semibold"
+              style={`color:${fuelColor}; border-color:${fuelColor}; background:color-mix(in srgb, ${fuelColor} 16%, transparent)`}
+            >
+              {fuel.toFixed(1)}%
+            </span>
           </li>
           <li class="flex items-center justify-between gap-2">
             <span class="text-[var(--muted)]">Datalink</span>
@@ -287,7 +318,10 @@
           </li>
           <li class="flex items-center justify-between gap-2">
             <span class="text-[var(--muted)]">Readiness</span>
-            <span class="font-semibold text-[var(--verify)]">{platform.readiness}</span>
+            <span class="flex items-center gap-1.5 font-semibold" style={`color:${readinessColor}`}>
+              <span class="inline-block h-2 w-2 rounded-full" style={`background:${readinessColor}`} aria-hidden="true"></span>
+              {platform.readiness}
+            </span>
           </li>
           <li class="flex items-center justify-between gap-2">
             <span class="text-[var(--muted)]">Payload</span>
