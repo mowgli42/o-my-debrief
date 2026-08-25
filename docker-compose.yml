@@ -2,7 +2,7 @@ services:
   backend:
     build: .
     ports:
-      - "8020:8020"
+      - "${DEBRIEF_API_PORT:-8020}:8020"
     environment:
       - PYTHONUNBUFFERED=1
       - DEBRIEF_DATA_DIR=/app/data/debrief

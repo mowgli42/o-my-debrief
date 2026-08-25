@@ -50,6 +50,10 @@ make fixtures
 
 # Terminal 1 — API on :8020 (/docs Swagger)
 make backend
+# Full o-my suite on one host: classification-guard also wants :8020.
+# Keep debrief on 8020; o-my `scripts/run-suite.sh` remaps the guard to :8041.
+# Override if needed: make backend DEBRIEF_API_PORT=8050
+#                    DEBRIEF_API_PROXY=http://127.0.0.1:8050 npm run dev
 
 # Terminal 2 — UI on :5173
 cd frontend && npm install && npm run dev
