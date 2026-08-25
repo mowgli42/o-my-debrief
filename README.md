@@ -55,11 +55,11 @@ make backend
 # Override if needed: make backend DEBRIEF_API_PORT=8050
 #                    DEBRIEF_API_PROXY=http://127.0.0.1:8050 npm run dev
 
-# Terminal 2 — UI on :5173
+# Terminal 2 — UI on :8920
 cd frontend && npm install && npm run dev
 ```
 
-Open **http://127.0.0.1:5173**
+Open **http://127.0.0.1:8920**
 
 1. Mission **Demo Strike-Recon (HAWK-1)** loads automatically  
 2. Scrub the timeline or hit **Play**  
@@ -74,7 +74,7 @@ curl -s 'http://127.0.0.1:8020/api/milestones?mission=msn-demo-strike-recon' | h
 make test
 ```
 
-Docker: `docker compose up` (API :8020, UI :5173). Live Redis profile: `docker compose --profile live up`.
+Docker: `docker compose up` (API :8020, UI :8920). Live Redis profile: `docker compose --profile live up`.
 
 ---
 
@@ -100,7 +100,7 @@ Refresh captures (API + Vite running):
 
 ```bash
 make capture
-# or: DEMO_URL=http://127.0.0.1:5173 cd frontend && node ../scripts/capture-screenshots.mjs
+# or: DEMO_URL=http://127.0.0.1:8920 cd frontend && node ../scripts/capture-screenshots.mjs
 ```
 
 ---

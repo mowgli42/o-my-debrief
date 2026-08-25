@@ -1,7 +1,7 @@
 .PHONY: install fixtures test backend frontend recorder demo capture
 
 DEBRIEF_API_PORT ?= 8020
-DEBRIEF_UI_PORT ?= 5173
+DEBRIEF_UI_PORT ?= 8920
 
 install:
 	python3 -m venv .venv
@@ -26,7 +26,7 @@ recorder:
 demo: fixtures
 	@echo "API :$(DEBRIEF_API_PORT)  UI :$(DEBRIEF_UI_PORT)  — run make backend and make frontend in separate terminals"
 	@echo "Swagger: http://127.0.0.1:$(DEBRIEF_API_PORT)/docs"
-	@echo "On a full o-my suite host, keep 8020 for debrief; o-my remaps classification-guard to :8041."
+	@echo "Debrief owns 8020 (API) and 8920 (UI). See o-my docs/PORTS.md."
 
 capture:
 	cd frontend && node ../scripts/capture-screenshots.mjs
