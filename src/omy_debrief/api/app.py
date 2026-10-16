@@ -10,7 +10,14 @@ from fastapi.responses import FileResponse
 
 from omy_debrief import __version__
 from omy_debrief import store
-from omy_debrief.models.events import DebriefEvent, Milestone, MissionManifest, PlatformState
+from omy_debrief.models.events import (
+    CompareResult,
+    DebriefEvent,
+    Milestone,
+    MissionManifest,
+    MissionPlan,
+    PlatformState,
+)
 
 app = FastAPI(
     title="o-my Platform Debrief API",
@@ -115,6 +122,27 @@ def summary(mission: str = Query(...)) -> dict[str, Any]:
 @app.get("/api/milestone-rules")
 def milestone_rules() -> dict[str, Any]:
     return store.load_rules()
+
+
+@app.get("/api/plan", response_model=MissionPlan)
+def plan(mission: str = Query(...)) -> MissionPlan:
+    """Mission plan (route + planned events). Empty available=false when missing."""
+    try:
+        return store.load_plan(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/compare", response_model=CompareResult)
+def compare(
+    mission: str = Query(...),
+    tolerance_seconds: float = Query(90.0, ge=0, description="Fuzzy time window (seconds)"),
+) -> CompareResult:
+    """Fuzzy plan-vs-actual event pairing within tolerance."""
+    try:
+        return store.compare_plan_actual(mission, tolerance_seconds=tolerance_seconds)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
 
 
 @app.get("/api/media")

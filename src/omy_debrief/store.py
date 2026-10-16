@@ -14,9 +14,13 @@ import pyarrow.parquet as pq
 import yaml
 
 from omy_debrief.models.events import (
+    ComparePair,
+    CompareResult,
     DebriefEvent,
     Milestone,
     MissionManifest,
+    MissionPlan,
+    PlanEvent,
     PlatformState,
     TaskStatusEntry,
 )
@@ -585,3 +589,149 @@ def media_file_path(mission_id: str, filename: str) -> Path:
     if not path.is_file():
         raise FileNotFoundError(safe)
     return path
+
+
+def _manifest_for(mission_id: str) -> MissionManifest:
+    manifests = {m.mission_id: m for m in load_manifest()}
+    if mission_id not in manifests:
+        raise KeyError(f"Unknown mission: {mission_id}")
+    return manifests[mission_id]
+
+
+def load_plan(mission_id: str) -> MissionPlan:
+    """Load mission plan sidecar; graceful empty when missing."""
+    m = _manifest_for(mission_id)
+    if not m.plan_path:
+        return MissionPlan(available=False, mission_id=mission_id)
+    path = data_dir() / m.plan_path
+    if not path.is_file():
+        return MissionPlan(available=False, mission_id=mission_id)
+    raw = json.loads(path.read_text())
+    events = [PlanEvent(**e) for e in (raw.get("events") or [])]
+    return MissionPlan(
+        available=True,
+        mission_id=raw.get("mission_id") or mission_id,
+        route=list(raw.get("route") or []),
+        events=events,
+    )
+
+
+def _event_family(
+    *,
+    event_type: str,
+    status: str | None = None,
+    marker: str | None = None,
+) -> str | None:
+    """Map plan/actual events into compare families."""
+    et = event_type
+    st = (status or "").upper()
+    mk = marker or ""
+    if et == "task" or mk == "caret":
+        return "strike"
+    if et == "sensorCollect" or mk == "diamond":
+        return "collect"
+    if et == "bda" or mk == "flag":
+        return "bda"
+    if et == "dissemination":
+        return "dissem"
+    if et == "waypoint":
+        return "waypoint"
+    if st in {"EXECUTED", "ASSIGNED", "PLANNED"} and et == "task":
+        return "strike"
+    return None
+
+
+def compare_plan_actual(
+    mission_id: str,
+    *,
+    tolerance_seconds: float = 90.0,
+) -> CompareResult:
+    """Fuzzy 1:1 match planned events to as-executed by family within tolerance.
+
+    ponytail: O(n·m) per family is fine for demo-scale; upgrade to interval index
+    if missions grow past ~1k comparable events.
+    """
+    _manifest_for(mission_id)
+    plan = load_plan(mission_id)
+    actuals = list_events(mission_id)
+    tol = max(0.0, float(tolerance_seconds))
+
+    plan_by_fam: dict[str, list[PlanEvent]] = {}
+    for pe in plan.events:
+        fam = _event_family(event_type=pe.event_type, status=pe.status, marker=pe.marker)
+        if fam:
+            plan_by_fam.setdefault(fam, []).append(pe)
+
+    actual_by_fam: dict[str, list[DebriefEvent]] = {}
+    for ae in actuals:
+        fam = _event_family(event_type=ae.event_type, status=ae.status, marker=ae.marker)
+        if fam:
+            # Prefer EXECUTED strikes over ASSIGNED for pairing
+            if fam == "strike" and (ae.status or "").upper() == "ASSIGNED":
+                continue
+            actual_by_fam.setdefault(fam, []).append(ae)
+
+    pairs: list[ComparePair] = []
+    matched_plan: set[str] = set()
+    matched_actual: set[str] = set()
+
+    for fam, plan_list in plan_by_fam.items():
+        act_list = actual_by_fam.get(fam) or []
+        candidates: list[tuple[float, float, PlanEvent, DebriefEvent]] = []
+        for pe in plan_list:
+            p_ts = _parse_ts(pe.timestamp)
+            for ae in act_list:
+                delta = abs((_parse_ts(ae.timestamp) - p_ts).total_seconds())
+                if delta > tol:
+                    continue
+                target_boost = 1000.0 if (pe.target_id and pe.target_id == ae.target_id) else 0.0
+                sensor_boost = (
+                    50.0
+                    if fam == "collect" and pe.sensor and pe.sensor == ae.sensor
+                    else 0.0
+                )
+                score = target_boost + sensor_boost + (tol - delta)
+                candidates.append((score, delta, pe, ae))
+        # Greedy closest / highest score first
+        candidates.sort(key=lambda c: (-c[0], c[1]))
+        for score, delta, pe, ae in candidates:
+            if pe.plan_event_id in matched_plan or ae.event_id in matched_actual:
+                continue
+            matched_plan.add(pe.plan_event_id)
+            matched_actual.add(ae.event_id)
+            pairs.append(
+                ComparePair(
+                    plan_event_id=pe.plan_event_id,
+                    actual_event_id=ae.event_id,
+                    kind=fam,
+                    delta_seconds=round(delta, 3),
+                    score=round(score, 3),
+                )
+            )
+
+    unmatched_plan = [
+        pe.plan_event_id
+        for pe in plan.events
+        if _event_family(event_type=pe.event_type, status=pe.status, marker=pe.marker)
+        and pe.plan_event_id not in matched_plan
+    ]
+    # Only flag unmatched actuals for families present in the plan (avoids
+    # glowing every waypoint when the plan has no waypoint events).
+    plan_families = set(plan_by_fam.keys())
+    unmatched_actual: list[str] = []
+    for ae in actuals:
+        fam = _event_family(event_type=ae.event_type, status=ae.status, marker=ae.marker)
+        if not fam or fam not in plan_families:
+            continue
+        if fam == "strike" and (ae.status or "").upper() == "ASSIGNED":
+            continue
+        if ae.event_id not in matched_actual:
+            unmatched_actual.append(ae.event_id)
+
+    return CompareResult(
+        mission_id=mission_id,
+        tolerance_seconds=tol,
+        pairs=pairs,
+        unmatched_plan=unmatched_plan,
+        unmatched_actual=unmatched_actual,
+    )

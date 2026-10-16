@@ -1,14 +1,17 @@
 <script>
   import { onMount } from 'svelte'
   import Timeline from './lib/Timeline.svelte'
+  import CompareTimeline from './lib/CompareTimeline.svelte'
   import Milestones from './lib/Milestones.svelte'
   import MissionMap from './lib/MissionMap.svelte'
   import VehicleStatus from './lib/VehicleStatus.svelte'
   import {
+    fetchCompare,
     fetchEvents,
     fetchMedia,
     fetchMilestones,
     fetchMissions,
+    fetchPlan,
     fetchPositionAt,
     fetchStateAt,
     fetchSummary,
@@ -27,6 +30,8 @@
   let waypoints = $state([])
   let track = $state([])
   let media = $state([])
+  let missionPlan = $state(null)
+  let compareResult = $state(null)
   let platformState = $state(null)
   let position = $state(null)
   let currentTime = $state(null)
@@ -36,9 +41,17 @@
   let summaryOpen = $state(false)
   let summaryText = $state('')
   let selectedEventId = $state(null)
+  let compareMode = $state(false)
+  let hidePlan = $state(false)
+  let showPlannedRoute = $state(true)
   let playTimer = null
   let videoChannel = null
   let videoWindow = null
+
+  let plannedRoute = $derived(missionPlan?.available ? missionPlan.route || [] : [])
+  let planEvents = $derived(missionPlan?.available ? missionPlan.events || [] : [])
+  let comparePairs = $derived(compareResult?.pairs || [])
+  let unmatchedActual = $derived(compareResult?.unmatched_actual || [])
 
   /** Clip linked to selected milestone, else clip covering current time. */
   let activeClip = $derived.by(() => {
@@ -67,18 +80,22 @@
     loading = true
     error = ''
     try {
-      const [ev, ms, wp, tr, md] = await Promise.all([
+      const [ev, ms, wp, tr, md, plan, cmp] = await Promise.all([
         fetchEvents(id),
         fetchMilestones(id),
         fetchWaypoints(id),
         fetchTrack(id),
         fetchMedia(id).catch(() => []),
+        fetchPlan(id).catch(() => ({ available: false, route: [], events: [] })),
+        fetchCompare(id).catch(() => null),
       ])
       events = ev
       milestones = ms
       waypoints = wp
       track = tr
       media = md
+      missionPlan = plan
+      compareResult = cmp
       const m = missions.find((x) => x.mission_id === id)
       currentTime = m?.start_time || ev[0]?.timestamp
       await refreshState()
@@ -174,6 +191,8 @@
       exported_at: new Date().toISOString(),
       current_time: currentTime,
       milestones,
+      compare: compareResult,
+      plan_available: Boolean(missionPlan?.available),
       state: platformState,
       summary: summaryText || null,
       media_clips: media.map((c) => ({
@@ -297,7 +316,34 @@
       </div>
     {/if}
 
-    <div class="ml-auto flex items-center gap-2">
+    <div class="ml-auto flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        class="rounded-sm border px-3 py-1.5 text-sm"
+        class:border-[var(--accent)]={compareMode}
+        class:bg-[rgba(61,214,198,0.12)]={compareMode}
+        class:text-[var(--accent)]={compareMode}
+        class:border-[var(--line)]={!compareMode}
+        class:bg-[var(--bg-elevated)]={!compareMode}
+        onclick={() => (compareMode = !compareMode)}
+        title={missionPlan?.available ? 'Plan vs as-executed' : 'No mission plan for this mission'}
+      >
+        Compare
+      </button>
+      {#if compareMode}
+        <label class="flex items-center gap-2 text-xs text-[var(--muted)]">
+          <span>Hide mission plan</span>
+          <button
+            type="button"
+            class="slide-toggle"
+            class:on={hidePlan}
+            role="switch"
+            aria-checked={hidePlan}
+            aria-label="Hide mission plan"
+            onclick={() => (hidePlan = !hidePlan)}
+          ></button>
+        </label>
+      {/if}
       <button
         type="button"
         class="rounded-sm border border-[var(--line)] bg-[var(--bg-elevated)] px-3 py-1.5 text-sm hover:border-[var(--accent)]"
@@ -329,14 +375,32 @@
   {/if}
 
   <div class="shrink-0 px-4 pt-3">
-    <Timeline
-      {events}
-      start={mission?.start_time}
-      end={mission?.end_time}
-      {currentTime}
-      highlightEventId={selectedEventId}
-      onscrub={scrub}
-    />
+    {#if compareMode}
+      <CompareTimeline
+        {planEvents}
+        actualEvents={events}
+        pairs={comparePairs}
+        {unmatchedActual}
+        start={mission?.start_time}
+        end={mission?.end_time}
+        {currentTime}
+        highlightEventId={selectedEventId}
+        {hidePlan}
+        onscrub={scrub}
+      />
+      {#if missionPlan && !missionPlan.available}
+        <div class="mt-1 text-xs text-[var(--muted)]">No mission plan for this mission.</div>
+      {/if}
+    {:else}
+      <Timeline
+        {events}
+        start={mission?.start_time}
+        end={mission?.end_time}
+        {currentTime}
+        highlightEventId={selectedEventId}
+        onscrub={scrub}
+      />
+    {/if}
   </div>
 
   <main class="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-4 lg:grid-cols-12">
@@ -354,10 +418,13 @@
         {waypoints}
         {events}
         {track}
+        {plannedRoute}
+        bind:showPlannedRoute
         platform={platformState}
         {position}
         {currentTime}
         highlightEventId={selectedEventId}
+        {unmatchedActual}
       />
     </div>
     <div class="min-h-0 lg:col-span-3">

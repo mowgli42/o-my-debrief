@@ -42,6 +42,16 @@ export function fetchSummary(mission) {
   return get(`/api/summary?mission=${encodeURIComponent(mission)}`)
 }
 
+export function fetchPlan(mission) {
+  return get(`/api/plan?mission=${encodeURIComponent(mission)}`)
+}
+
+export function fetchCompare(mission, toleranceSeconds = 90) {
+  return get(
+    `/api/compare?mission=${encodeURIComponent(mission)}&tolerance_seconds=${toleranceSeconds}`,
+  )
+}
+
 export function fetchMedia(mission) {
   return get(`/api/media?mission=${encodeURIComponent(mission)}`)
 }

@@ -151,6 +151,7 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
         )
 
     # Sensor collects (diamonds) — each links a timeline-synced sensor video clip
+    # Last entry is intentionally unplanned (no peer in mission plan) for compare glow.
     collects = [
         (8.0, WAYPOINTS[2][0], WAYPOINTS[2][1], "EO", "TGT-042", "EO collected 3-image set on TGT-042", "clip-eo-042"),
         (10.5, 36.94, 35.74, "IR", "TGT-042", "IR collect on TGT-042 (thermal)", "clip-ir-042"),
@@ -158,8 +159,18 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
         (14.5, 37.00, 35.88, "EO", "TGT-055", "EO revisit on TGT-055", "clip-eo-055"),
         (22.0, WAYPOINTS[6][0], WAYPOINTS[6][1], "EO", "TGT-042", "Post-strike EO BDA collect on TGT-042", "clip-bda-eo-042"),
         (24.0, 37.02, 36.18, "IR", "TGT-042", "IR BDA confirmation pass", "clip-bda-ir-042"),
+        (17.2, 37.03, 35.98, "EO", "TGT-061", "Unplanned opportunistic EO collect on TGT-061", None),
     ]
     for minutes, lat, lon, sensor, tgt, summary, clip_id in collects:
+        payload: dict[str, Any] = {
+            "images": 3 if sensor == "EO" else 1,
+            "size_gb": 2.1 if sensor == "EO" else 0.4,
+            "mode": "spot",
+        }
+        if clip_id:
+            payload["media_clip_id"] = clip_id
+        if tgt == "TGT-061":
+            payload["unplanned"] = True
         add(
             minutes=minutes,
             event_type="sensorCollect",
@@ -171,12 +182,7 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
             sensor=sensor,
             status="success",
             marker="diamond",
-            payload={
-                "images": 3 if sensor == "EO" else 1,
-                "size_gb": 2.1 if sensor == "EO" else 0.4,
-                "mode": "spot",
-                "media_clip_id": clip_id,
-            },
+            payload=payload,
         )
 
     # Dissemination
@@ -255,6 +261,162 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
     return events
 
 
+def build_demo_plan(base: datetime | None = None) -> dict[str, Any]:
+    """Planned route + events with intentional time skew vs as-executed."""
+    base = base or datetime(2026, 7, 21, 14, 0, 0, tzinfo=UTC)
+    # Planned route: slight offset so map shows plan under / beside actual track
+    route = [
+        {
+            "lat": lat + 0.012,
+            "lon": lon - 0.008,
+            "label": label,
+            "index": i,
+        }
+        for i, (lat, lon, label) in enumerate(WAYPOINTS)
+    ]
+    planned: list[dict[str, Any]] = []
+
+    def add_plan(
+        *,
+        pid: str,
+        minutes: float,
+        event_type: str,
+        summary: str,
+        marker: str = "none",
+        target_id: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        sensor: str | None = None,
+        status: str | None = "PLANNED",
+    ) -> None:
+        planned.append(
+            {
+                "plan_event_id": pid,
+                "timestamp": _ts(base, minutes),
+                "event_type": event_type,
+                "summary": summary,
+                "target_id": target_id,
+                "lat": lat,
+                "lon": lon,
+                "sensor": sensor,
+                "status": status,
+                "marker": marker,
+                "payload": {},
+            }
+        )
+
+    # Collects planned ~45–75s earlier than as-executed peers (no TGT-061 — unplanned actual)
+    add_plan(
+        pid="PLAN-COL-EO-042",
+        minutes=7.0,
+        event_type="sensorCollect",
+        summary="Planned EO collect on TGT-042",
+        marker="diamond",
+        target_id="TGT-042",
+        lat=WAYPOINTS[2][0] + 0.012,
+        lon=WAYPOINTS[2][1] - 0.008,
+        sensor="EO",
+    )
+    add_plan(
+        pid="PLAN-COL-IR-042",
+        minutes=9.5,
+        event_type="sensorCollect",
+        summary="Planned IR collect on TGT-042",
+        marker="diamond",
+        target_id="TGT-042",
+        lat=36.94 + 0.012,
+        lon=35.74 - 0.008,
+        sensor="IR",
+    )
+    add_plan(
+        pid="PLAN-COL-SAR-055",
+        minutes=11.0,
+        event_type="sensorCollect",
+        summary="Planned SAR collect on TGT-055",
+        marker="diamond",
+        target_id="TGT-055",
+        lat=WAYPOINTS[3][0] + 0.012,
+        lon=WAYPOINTS[3][1] - 0.008,
+        sensor="SAR",
+    )
+    add_plan(
+        pid="PLAN-COL-EO-055",
+        minutes=13.5,
+        event_type="sensorCollect",
+        summary="Planned EO revisit on TGT-055",
+        marker="diamond",
+        target_id="TGT-055",
+        lat=37.00 + 0.012,
+        lon=35.88 - 0.008,
+        sensor="EO",
+    )
+    # Strike planned ~75s before as-executed EXECUTED at 19.5 min
+    add_plan(
+        pid="PLAN-STRK-01",
+        minutes=18.25,
+        event_type="task",
+        summary="Planned strike STRK-01 on TGT-042",
+        marker="caret",
+        target_id="TGT-042",
+        lat=WAYPOINTS[5][0] + 0.012,
+        lon=WAYPOINTS[5][1] - 0.008,
+        status="PLANNED",
+    )
+    add_plan(
+        pid="PLAN-BDA-EO-042",
+        minutes=21.0,
+        event_type="sensorCollect",
+        summary="Planned post-strike EO BDA collect on TGT-042",
+        marker="diamond",
+        target_id="TGT-042",
+        lat=WAYPOINTS[6][0] + 0.012,
+        lon=WAYPOINTS[6][1] - 0.008,
+        sensor="EO",
+    )
+    add_plan(
+        pid="PLAN-BDA-IR-042",
+        minutes=23.0,
+        event_type="sensorCollect",
+        summary="Planned IR BDA confirmation pass",
+        marker="diamond",
+        target_id="TGT-042",
+        lat=37.02 + 0.012,
+        lon=36.18 - 0.008,
+        sensor="IR",
+    )
+    add_plan(
+        pid="PLAN-DISS-042",
+        minutes=8.25,
+        event_type="dissemination",
+        summary="Planned dissemination of EO product for TGT-042",
+        marker="circle",
+        target_id="TGT-042",
+        status="PLANNED",
+    )
+    add_plan(
+        pid="PLAN-DISS-055",
+        minutes=12.25,
+        event_type="dissemination",
+        summary="Planned dissemination of SAR strip for TGT-055",
+        marker="circle",
+        target_id="TGT-055",
+        status="PLANNED",
+    )
+    add_plan(
+        pid="PLAN-BDA-042",
+        minutes=24.5,
+        event_type="bda",
+        summary="Planned BDA verification on TGT-042",
+        marker="flag",
+        target_id="TGT-042",
+        lat=WAYPOINTS[6][0] + 0.012,
+        lon=WAYPOINTS[6][1] - 0.008,
+        status="PLANNED",
+    )
+
+    return {"mission_id": MISSION_ID, "route": route, "events": planned}
+
+
 def write_mission(out_dir: Path, events: list[dict[str, Any]] | None = None) -> Path:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -282,18 +444,25 @@ def write_mission(out_dir: Path, events: list[dict[str, Any]] | None = None) -> 
     parquet_path = out_dir / f"{MISSION_ID}.parquet"
     pq.write_table(table, parquet_path)
 
+    plan = build_demo_plan()
+    plan_name = f"{MISSION_ID}.plan.json"
+    plan_path = out_dir / plan_name
+    plan_path.write_text(json.dumps(plan, indent=2) + "\n")
+
     times = sorted(e["timestamp"] for e in events)
     manifest = {
         "mission_id": MISSION_ID,
         "name": "Demo Strike-Recon (HAWK-1)",
         "description": (
             "Synthetic recon-strike mission: EO/IR/SAR collects, dissemination, "
-            "strike execution, and BDA verification on TGT-042."
+            "strike execution, and BDA verification on TGT-042. Includes mission "
+            "plan sidecar for plan-vs-actual compare."
         ),
         "start_time": times[0],
         "end_time": times[-1],
         "platform_callsign": CALLSIGN,
         "parquet_path": parquet_path.name,
+        "plan_path": plan_name,
         "event_count": len(events),
         "waypoint_count": len(WAYPOINTS),
         "waypoints": [
@@ -319,6 +488,7 @@ def write_mission(out_dir: Path, events: list[dict[str, Any]] | None = None) -> 
 
     media_catalog = write_media(out_dir)
     print(f"Wrote media catalog {media_catalog}")
+    print(f"Wrote plan {plan_path}")
 
     return parquet_path
 
