@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import L from 'leaflet'
   import { sensorColor } from './api.js'
+  import { SUITE_DARK_LABELS, SUITE_DARK_TILES } from './basemap.js'
 
   let {
     waypoints = [],
@@ -28,15 +29,16 @@
   let unmatchedSet = $derived(new Set(unmatchedActual || []))
 
   onMount(() => {
+    // Suite-standard dark base map (key-free dark tiles, zoom capped for
+    // regional demo scale). See lib/basemap.js and docs/SHARED-DARK-MAP.md.
     map = L.map(mapEl, {
       zoomControl: true,
       attributionControl: true,
+      maxZoom: SUITE_DARK_TILES.maxZoom,
     }).setView([36.95, 35.85], 9)
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OSM &copy; CARTO',
-      maxZoom: 18,
-    }).addTo(map)
+    L.tileLayer(SUITE_DARK_TILES.url, SUITE_DARK_TILES).addTo(map)
+    L.tileLayer(SUITE_DARK_LABELS.url, SUITE_DARK_LABELS).addTo(map)
 
     // Plan under actual: insert plan pane below overlay
     map.createPane('plannedRoute')
