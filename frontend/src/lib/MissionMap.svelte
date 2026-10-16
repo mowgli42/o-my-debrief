@@ -7,19 +7,25 @@
     waypoints = [],
     events = [],
     track = [],
+    plannedRoute = [],
+    showPlannedRoute = $bindable(true),
     platform = null,
     position = null,
     currentTime = null,
     highlightEventId = null,
+    unmatchedActual = [],
   } = $props()
 
   let mapEl = $state(null)
   let map = null
+  let planRouteLayer = null
   let routeLayer = null
   let trackLayer = null
   let eventLayer = null
   let platformMarker = null
   let fitted = false
+
+  let unmatchedSet = $derived(new Set(unmatchedActual || []))
 
   onMount(() => {
     map = L.map(mapEl, {
@@ -32,8 +38,15 @@
       maxZoom: 18,
     }).addTo(map)
 
+    // Plan under actual: insert plan pane below overlay
+    map.createPane('plannedRoute')
+    map.getPane('plannedRoute').style.zIndex = 350
+    map.createPane('actualTrack')
+    map.getPane('actualTrack').style.zIndex = 450
+
+    planRouteLayer = L.layerGroup({ pane: 'plannedRoute' }).addTo(map)
     routeLayer = L.layerGroup().addTo(map)
-    trackLayer = L.layerGroup().addTo(map)
+    trackLayer = L.layerGroup({ pane: 'actualTrack' }).addTo(map)
     eventLayer = L.layerGroup().addTo(map)
 
     return () => {
@@ -43,11 +56,25 @@
   })
 
   $effect(() => {
+    if (!map || !planRouteLayer) return
+    planRouteLayer.clearLayers()
+    if (!showPlannedRoute || !plannedRoute?.length) return
+    const latlngs = plannedRoute.map((w) => [w.lat, w.lon])
+    L.polyline(latlngs, {
+      color: '#5a6f8c',
+      weight: 3,
+      opacity: 0.45,
+      dashArray: '8 6',
+      pane: 'plannedRoute',
+    }).addTo(planRouteLayer)
+  })
+
+  $effect(() => {
     if (!map || !routeLayer) return
     routeLayer.clearLayers()
     if (!waypoints.length) return
     const latlngs = waypoints.map((w) => [w.lat, w.lon])
-    L.polyline(latlngs, { color: '#3dd6c6', weight: 2, opacity: 0.55, dashArray: '6 4' }).addTo(
+    L.polyline(latlngs, { color: '#3dd6c6', weight: 2, opacity: 0.35, dashArray: '6 4' }).addTo(
       routeLayer,
     )
     waypoints.forEach((w, i) => {
@@ -62,7 +89,13 @@
         .addTo(routeLayer)
     })
     if (!fitted) {
-      map.fitBounds(L.latLngBounds(latlngs).pad(0.25))
+      const boundsPts = [
+        ...latlngs,
+        ...(showPlannedRoute && plannedRoute?.length
+          ? plannedRoute.map((w) => [w.lat, w.lon])
+          : []),
+      ]
+      map.fitBounds(L.latLngBounds(boundsPts).pad(0.25))
       fitted = true
     }
   })
@@ -79,6 +112,7 @@
         color: '#f0c14a',
         weight: 3,
         opacity: 0.9,
+        pane: 'actualTrack',
       }).addTo(trackLayer)
     }
   })
@@ -92,6 +126,7 @@
       if (!['sensorCollect', 'task', 'bda'].includes(e.event_type)) continue
       const past = new Date(e.timestamp).getTime() <= t
       const highlighted = highlightEventId && e.event_id === highlightEventId
+      const unplanned = unmatchedSet.has(e.event_id)
       const color =
         e.event_type === 'sensorCollect'
           ? sensorColor(e.sensor)
@@ -99,30 +134,33 @@
             ? '#ff7a45'
             : '#5ddea0'
       const opacity = past || highlighted ? 1 : 0.4
+      const glow = unplanned
+        ? 'filter:drop-shadow(0 0 8px rgba(255,193,74,.95)) drop-shadow(0 0 14px rgba(255,122,69,.8));'
+        : ''
 
       if (e.event_type === 'task' || e.marker === 'caret') {
-        const size = highlighted ? 22 : 18
+        const size = highlighted || unplanned ? 22 : 18
         L.marker([e.lat, e.lon], {
           icon: L.divIcon({
             className: '',
-            html: `<div style="font-size:${size}px;line-height:1;color:${color};text-shadow:0 0 6px rgba(0,0,0,.9);${highlighted ? 'outline:2px solid #3dd6c6;outline-offset:2px;border-radius:2px;' : ''}">▼</div>`,
+            html: `<div style="font-size:${size}px;line-height:1;color:${color};text-shadow:0 0 6px rgba(0,0,0,.9);${glow}${highlighted ? 'outline:2px solid #3dd6c6;outline-offset:2px;border-radius:2px;' : ''}">▼</div>`,
             iconSize: [size, size],
             iconAnchor: [size / 2, size / 2],
           }),
           opacity,
         })
-          .bindTooltip(e.summary, { direction: 'top' })
+          .bindTooltip(`${unplanned ? 'Unplanned · ' : ''}${e.summary}`, { direction: 'top' })
           .addTo(eventLayer)
       } else {
         L.circleMarker([e.lat, e.lon], {
-          radius: highlighted ? 9 : e.event_type === 'bda' ? 7 : 6,
-          color: highlighted ? '#3dd6c6' : color,
+          radius: highlighted || unplanned ? 9 : e.event_type === 'bda' ? 7 : 6,
+          color: unplanned ? '#f0c14a' : highlighted ? '#3dd6c6' : color,
           fillColor: color,
           fillOpacity: past || highlighted ? 0.85 : 0.25,
-          weight: highlighted ? 3 : past ? 2 : 1,
+          weight: highlighted || unplanned ? 3 : past ? 2 : 1,
           opacity,
         })
-          .bindTooltip(e.summary, { direction: 'top' })
+          .bindTooltip(`${unplanned ? 'Unplanned · ' : ''}${e.summary}`, { direction: 'top' })
           .addTo(eventLayer)
       }
     }
@@ -152,10 +190,22 @@
 </script>
 
 <div class="panel flex h-full min-h-0 flex-col rounded-sm overflow-hidden">
-  <header class="border-b border-[var(--line)] px-3 py-2">
+  <header class="flex items-center justify-between gap-2 border-b border-[var(--line)] px-3 py-2">
     <h2 class="text-sm font-semibold tracking-[0.12em] uppercase text-[var(--accent)]">
       Route & tasks
     </h2>
+    <label class="flex cursor-pointer items-center gap-2 text-[11px] text-[var(--muted)]">
+      <span>Planned route</span>
+      <button
+        type="button"
+        class="slide-toggle"
+        class:on={showPlannedRoute}
+        role="switch"
+        aria-checked={showPlannedRoute}
+        aria-label="Show planned route"
+        onclick={() => (showPlannedRoute = !showPlannedRoute)}
+      ></button>
+    </label>
   </header>
   <div bind:this={mapEl} class="min-h-[280px] flex-1"></div>
 </div>

@@ -52,3 +52,51 @@ body {
   background: #0e1626;
   font-family: var(--font-display);
 }
+
+.slide-toggle {
+  position: relative;
+  display: inline-block;
+  width: 2.25rem;
+  height: 1.2rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-deep);
+  transition: background 0.15s ease, border-color 0.15s ease;
+  vertical-align: middle;
+  padding: 0;
+  cursor: pointer;
+}
+
+.slide-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 999px;
+  background: var(--muted);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.slide-toggle.on {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-deep));
+}
+
+.slide-toggle.on::after {
+  transform: translateX(1rem);
+  background: var(--accent);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

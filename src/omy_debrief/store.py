@@ -715,10 +715,13 @@ def compare_plan_actual(
         if _event_family(event_type=pe.event_type, status=pe.status, marker=pe.marker)
         and pe.plan_event_id not in matched_plan
     ]
+    # Only flag unmatched actuals for families present in the plan (avoids
+    # glowing every waypoint when the plan has no waypoint events).
+    plan_families = set(plan_by_fam.keys())
     unmatched_actual: list[str] = []
     for ae in actuals:
         fam = _event_family(event_type=ae.event_type, status=ae.status, marker=ae.marker)
-        if not fam:
+        if not fam or fam not in plan_families:
             continue
         if fam == "strike" and (ae.status or "").upper() == "ASSIGNED":
             continue

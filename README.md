@@ -33,7 +33,7 @@ Captures live or simulated OMS bus messages from o-my Redis topics, persists the
 | Sensor video playback (timeline-synced FOV clips) | Shipped (separate pop-out viewer) |
 | Unit tests (`make test`) | Shipped (13) |
 | Screenshots | Shipped (`docs/screenshots/`) |
-| Plan vs as-executed compare (stacked timeline + planned route) | Specced (`omd-2ek`; OpenSpec `add-plan-vs-actual-compare`) |
+| Plan vs as-executed compare (stacked timeline + planned route) | Shipped (`omd-2ek`; screenshots `09`–`11`) |
 
 Living spec: [`openspec/specs/o-my-debrief/spec.md`](openspec/specs/o-my-debrief/spec.md) · Gherkin: [`features/o-my-debrief.feature`](features/o-my-debrief.feature), [`features/plan-vs-actual.feature`](features/plan-vs-actual.feature) · Beads: [`BEADS.md`](BEADS.md) · Grok notes: [`docs/GROK-TASKS.md`](docs/GROK-TASKS.md) · Classifier design: [`docs/MILESTONE-CLASSIFIER.md`](docs/MILESTONE-CLASSIFIER.md) · o-my-sim: [`docs/OMY-SIM-INTEGRATION.md`](docs/OMY-SIM-INTEGRATION.md) · Flight instruments: [`docs/FLIGHT-INDICATORS.md`](docs/FLIGHT-INDICATORS.md) · Sensor video: [`docs/VIDEO-PLAYBACK.md`](docs/VIDEO-PLAYBACK.md)
 

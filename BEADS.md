@@ -23,13 +23,13 @@ OpenSpec change: `openspec/changes/add-classifier-track-summary/`.
 
 OpenSpec: [`openspec/changes/add-plan-vs-actual-compare/`](openspec/changes/add-plan-vs-actual-compare/) · Gherkin: [`features/plan-vs-actual.feature`](features/plan-vs-actual.feature)
 
-| ID | Task | Depends on |
-|----|------|------------|
-| `omd-2ek.1` | Demo plan fixtures + `plan_path` on manifest | — (ready) |
-| `omd-2ek.2` | API: `GET /api/plan` + `GET /api/compare` fuzzy pairing | `.1` |
-| `omd-2ek.3` | UI: stacked Compare timeline, linkages, hide-plan toggle | `.2` |
-| `omd-2ek.4` | Map: subdued planned route under actual + toggle | `.2` |
-| `omd-2ek.5` | Docs + verification | `.3`, `.4` |
+| ID | Task | Status |
+|----|------|--------|
+| `omd-2ek.1` | Demo plan fixtures + `plan_path` on manifest | closed |
+| `omd-2ek.2` | API: `GET /api/plan` + `GET /api/compare` fuzzy pairing | closed |
+| `omd-2ek.3` | UI: stacked Compare timeline, linkages, hide-plan toggle | closed |
+| `omd-2ek.4` | Map: subdued planned route under actual + toggle | closed |
+| `omd-2ek.5` | Docs + verification | closed |
 
 ## Workflow
 
