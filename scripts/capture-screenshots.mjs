@@ -117,6 +117,32 @@ async function main() {
   await shot(videoPage, '08-video-overlays-off.png')
   await videoPage.close()
 
+  // Plan vs as-executed compare
+  await page.bringToFront()
+  const compare = page.getByRole('button', { name: 'Compare' })
+  if (await compare.count()) {
+    await compare.click()
+    await page.waitForTimeout(900)
+    await shot(page, '09-plan-vs-actual-compare.png')
+
+    const hidePlan = page.getByRole('switch', { name: 'Hide mission plan' })
+    if (await hidePlan.count()) {
+      await hidePlan.click()
+      await page.waitForTimeout(500)
+      await shot(page, '10-compare-hide-plan.png')
+      await hidePlan.click()
+      await page.waitForTimeout(300)
+    }
+
+    const plannedRoute = page.getByRole('switch', { name: 'Show planned route' })
+    if (await plannedRoute.count()) {
+      await plannedRoute.click()
+      await page.waitForTimeout(400)
+      await shot(page, '11-planned-route-off.png')
+      await plannedRoute.click()
+    }
+  }
+
   await browser.close()
   console.log('done')
 }

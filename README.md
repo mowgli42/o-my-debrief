@@ -5,6 +5,7 @@
 Captures live or simulated OMS bus messages from o-my Redis topics, persists them to Parquet, exposes time/milestone queries via FastAPI + Swagger, and renders a Svelte debrief station with:
 
 - Interactive timeline — **◆** sensor collects, **▼** strike tasks, **⚑** BDA
+- **Plan vs as-executed** — Compare mode stacks plan above flown events with fuzzy pair links and unplanned glow; map shows subdued planned route under the track
 - Stacked key milestones (left) — scrollable; selection highlights timeline event
 - Route / task map (center) — strike points as down carets
 - Vehicle status at scrub time — Mission / Launch-Recovery tabs, flight instruments, altitude profile
@@ -31,9 +32,9 @@ Captures live or simulated OMS bus messages from o-my Redis topics, persists the
 | Flight instruments (ASI / attitude / altimeter / HDG) | Shipped (Launch / Recovery tab) |
 | Launch / Recovery altitude profile + gear/systems | Shipped |
 | Sensor video playback (timeline-synced FOV clips) | Shipped (separate pop-out viewer) |
-| Unit tests (`make test`) | Shipped (13) |
-| Screenshots | Shipped (`docs/screenshots/`) |
-| Plan vs as-executed compare (stacked timeline + planned route) | Shipped (`omd-2ek`; screenshots `09`–`11`) |
+| Unit tests (`make test`) | Shipped (15) |
+| Screenshots | Shipped (`docs/screenshots/` `01`–`11`) |
+| Plan vs as-executed compare (stacked timeline + planned route) | Shipped (`omd-2ek`; see screenshots below) |
 
 Living spec: [`openspec/specs/o-my-debrief/spec.md`](openspec/specs/o-my-debrief/spec.md) · Gherkin: [`features/o-my-debrief.feature`](features/o-my-debrief.feature), [`features/plan-vs-actual.feature`](features/plan-vs-actual.feature) · Beads: [`BEADS.md`](BEADS.md) · Grok notes: [`docs/GROK-TASKS.md`](docs/GROK-TASKS.md) · Classifier design: [`docs/MILESTONE-CLASSIFIER.md`](docs/MILESTONE-CLASSIFIER.md) · o-my-sim: [`docs/OMY-SIM-INTEGRATION.md`](docs/OMY-SIM-INTEGRATION.md) · Flight instruments: [`docs/FLIGHT-INDICATORS.md`](docs/FLIGHT-INDICATORS.md) · Sensor video: [`docs/VIDEO-PLAYBACK.md`](docs/VIDEO-PLAYBACK.md)
 
@@ -64,8 +65,9 @@ Open **http://127.0.0.1:8920**
 
 1. Mission **Demo Strike-Recon (HAWK-1)** loads automatically  
 2. Scrub the timeline or hit **Play**  
-3. Click a milestone with a **Video** badge — scrub syncs; **Open video viewer** for the pop-out feed  
-4. **Export Debrief Report** downloads a JSON after-action bundle  
+3. Click **Compare** — plan track above as-executed, pair links, glowing unplanned events; toggle **Hide mission plan** / **Planned route**  
+4. Click a milestone with a **Video** badge — scrub syncs; **Open video viewer** for the pop-out feed  
+5. **Export Debrief Report** downloads a JSON after-action bundle  
 
 API smoke:
 
@@ -97,6 +99,12 @@ Docker: `docker compose up` (API :8020, UI :8920). Live Redis profile: `docker c
 
 ![Pop-out viewer — overlays off (classification remains)](docs/screenshots/08-video-overlays-off.png)
 
+![Compare — plan above as-executed, pair linkages, unplanned glow, planned route under track](docs/screenshots/09-plan-vs-actual-compare.png)
+
+![Compare — Hide mission plan toggle (as-executed only)](docs/screenshots/10-compare-hide-plan.png)
+
+![Map — Planned route toggle off (flown track remains)](docs/screenshots/11-planned-route-off.png)
+
 Refresh captures (API + Vite running):
 
 ```bash
@@ -125,11 +133,13 @@ flowchart LR
     Ev["/api/events"]
     Ms["/api/milestones"]
     St["/api/state_at"]
+    Plan["/api/plan + /compare"]
     Swagger["/docs"]
   end
 
   subgraph UI["debrief-display — Svelte 5"]
     TL[Timeline ◆ ▼]
+    Cmp[Compare plan / actual]
     Left[Milestones]
     Map[Leaflet map]
     Veh[Vehicle status]
@@ -139,9 +149,10 @@ flowchart LR
   Live --> Norm
   Demo --> PQ
   Norm --> PQ
-  PQ --> Ev & Ms & St
-  Ev & Ms & St --> UI
+  PQ --> Ev & Ms & St & Plan
+  Ev & Ms & St & Plan --> UI
   TL --- Left
+  Cmp --- Map
   TL --- Map
   TL --- Veh
 ```
