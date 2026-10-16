@@ -174,9 +174,12 @@ Follow the established OpenSpec + Gherkin + Beads + Cursor workflow from fuzzy-r
 - Rule-based `/api/summary` AAR narrative
 - Recorder OMS XML normalization for o-my-sim `PlatformStatusReport`
 
-This spec is the source of truth. Scenarios in the companion .feature file provide BDD tests and acceptance criteria. Active change deltas: `openspec/changes/add-classifier-track-summary/`.
+This spec is the source of truth. Scenarios in the companion .feature file(s) provide BDD tests and acceptance criteria. Active change deltas:
 
-**Status**: MVP shipped; classifier/track/summary change in progress toward archive
+- `openspec/changes/add-classifier-track-summary/` (shipped; archive when convenient)
+- `openspec/changes/add-plan-vs-actual-compare/` — plan vs as-executed stacked timeline, fuzzy pairing, planned route under actual (see `features/plan-vs-actual.feature`)
+
+**Status**: MVP + classifier/track/summary shipped; plan-vs-actual compare change open
 
 **Related**: o-my (core OMS C2), o-my-sim (message generation for testing), battlespace-manager (potential consumer or extension point), fuzzy-reconciler (reference for OpenSpec/Svelte/FastAPI patterns), Schwerpunkt (for any agentic extensions to milestone detection or summarization).
 

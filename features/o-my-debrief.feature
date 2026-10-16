@@ -94,4 +94,5 @@ Feature: o-my Platform Debrief
     Then captured data is immediately usable by the debrief API and display
     And the display can be opened as a separate window or tab from o-my C2 or battlespace-manager for post-mission review
 
-# Additional scenarios for future: error handling on bad/missing parquet, multi-mission compare, AI-generated mission summary from milestones, full track animation from position messages, offline mode with bundled parquet, dark/light theme toggle, etc.
+# Plan vs as-executed compare: see features/plan-vs-actual.feature (change add-plan-vs-actual-compare)
+# Additional scenarios for future: error handling on bad/missing parquet, multi-mission compare across mission ids, AI-generated mission summary from milestones, offline mode with bundled parquet, dark/light theme toggle, etc.

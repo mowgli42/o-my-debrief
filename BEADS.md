@@ -2,11 +2,11 @@
 
 Issue DB: `.beads/` · prefix `omd` · run `bd ready` / `bd list`.
 
-## Epic
+## Epic (shipped)
 
 **`omd-h3a`** — MVP: Platform Debrief prototype (MVP phases closed)
 
-### Follow-on (Grok inputs incorporated)
+### Follow-on (Grok inputs — closed)
 
 | ID | Task | Notes |
 |----|------|-------|
@@ -17,10 +17,25 @@ Issue DB: `.beads/` · prefix `omd` · run `bd ready` / `bd list`.
 
 OpenSpec change: `openspec/changes/add-classifier-track-summary/`.
 
+## Epic (open): Plan vs as-executed
+
+**`omd-2ek`** — Plan vs as-executed compare (timeline + map)
+
+OpenSpec: [`openspec/changes/add-plan-vs-actual-compare/`](openspec/changes/add-plan-vs-actual-compare/) · Gherkin: [`features/plan-vs-actual.feature`](features/plan-vs-actual.feature)
+
+| ID | Task | Depends on |
+|----|------|------------|
+| `omd-2ek.1` | Demo plan fixtures + `plan_path` on manifest | — (ready) |
+| `omd-2ek.2` | API: `GET /api/plan` + `GET /api/compare` fuzzy pairing | `.1` |
+| `omd-2ek.3` | UI: stacked Compare timeline, linkages, hide-plan toggle | `.2` |
+| `omd-2ek.4` | Map: subdued planned route under actual + toggle | `.2` |
+| `omd-2ek.5` | Docs + verification | `.3`, `.4` |
+
 ## Workflow
 
 ```bash
 bd ready
 bd update <id> --claim
 bd close <id>
+bd dolt push   # sync beads data when remote configured
 ```
