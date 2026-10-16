@@ -149,3 +149,34 @@ def test_query_post(client: TestClient) -> None:
     )
     assert r.status_code == 200
     assert all(e["event_type"] in {"sensorCollect", "bda"} for e in r.json())
+
+
+def test_plan_available(client: TestClient, data_root: Path) -> None:
+    r = client.get(f"/api/plan?mission={MISSION_ID}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["available"] is True
+    assert len(body["route"]) >= 2
+    kinds = {e["event_type"] for e in body["events"]}
+    assert "task" in kinds
+    assert "sensorCollect" in kinds
+    assert (data_root / f"{MISSION_ID}.plan.json").is_file()
+    # Planned strike time differs from as-executed EXECUTED
+    plan_strike = next(e for e in body["events"] if e["event_type"] == "task")
+    actuals = client.get(f"/api/events?mission={MISSION_ID}&types=task").json()
+    executed = next(e for e in actuals if (e.get("status") or "").upper() == "EXECUTED")
+    assert plan_strike["timestamp"] != executed["timestamp"]
+
+
+def test_compare_fuzzy_and_unplanned(client: TestClient) -> None:
+    r = client.get(f"/api/compare?mission={MISSION_ID}&tolerance_seconds=90")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["tolerance_seconds"] == 90
+    strike_pairs = [p for p in body["pairs"] if p["kind"] == "strike"]
+    assert strike_pairs
+    assert all(p["delta_seconds"] <= 90 for p in strike_pairs)
+    # Unplanned opportunistic collect on TGT-061
+    events = client.get(f"/api/events?mission={MISSION_ID}").json()
+    unplanned = next(e for e in events if e.get("target_id") == "TGT-061")
+    assert unplanned["event_id"] in body["unmatched_actual"]

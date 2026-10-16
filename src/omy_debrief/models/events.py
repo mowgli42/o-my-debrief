@@ -103,5 +103,43 @@ class MissionManifest(BaseModel):
     end_time: str
     platform_callsign: str = "HAWK-1"
     parquet_path: str
+    plan_path: str | None = None
     event_count: int = 0
     waypoint_count: int = 0
+
+
+class PlanEvent(BaseModel):
+    plan_event_id: str
+    timestamp: str
+    event_type: EventType
+    summary: str = ""
+    target_id: str | None = None
+    lat: float | None = None
+    lon: float | None = None
+    sensor: str | None = None
+    status: str | None = None
+    marker: MarkerKind = "none"
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class MissionPlan(BaseModel):
+    available: bool = True
+    mission_id: str = ""
+    route: list[dict[str, Any]] = Field(default_factory=list)
+    events: list[PlanEvent] = Field(default_factory=list)
+
+
+class ComparePair(BaseModel):
+    plan_event_id: str
+    actual_event_id: str
+    kind: str
+    delta_seconds: float
+    score: float
+
+
+class CompareResult(BaseModel):
+    mission_id: str
+    tolerance_seconds: float
+    pairs: list[ComparePair] = Field(default_factory=list)
+    unmatched_plan: list[str] = Field(default_factory=list)
+    unmatched_actual: list[str] = Field(default_factory=list)
