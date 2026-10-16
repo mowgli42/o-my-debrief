@@ -162,7 +162,7 @@ flowchart LR
 | Recorder | Python — demo / JSONL / Redis → pyarrow Parquet |
 | Store | `omy_debrief.store` — time filters, milestone rules, state-at |
 | API | FastAPI + Pydantic, CORS, OpenAPI at `/docs` |
-| UI | Svelte 5 runes, Vite, Tailwind 4, Leaflet (CARTO dark tiles) |
+| UI | Svelte 5 runes, Vite, Tailwind 4, Leaflet (key-free dark tiles — suite standard, see [`docs/SHARED-DARK-MAP.md`](docs/SHARED-DARK-MAP.md)) |
 | Tracking | Beads (`bd`, prefix `omd`) + OpenSpec + Gherkin |
 
 ### Development sequence (OpenSpec)
@@ -220,6 +220,7 @@ frontend/                 Svelte 5 debrief station
 tests/test_api.py         API smoke tests
 docs/screenshots/         UI captures
 docs/GROK-TASKS.md        Tasks suited for Grok
+docs/SHARED-DARK-MAP.md   Suite dark base-map convention (tiles, zoom cap)
 data/debrief/             Generated parquet (make fixtures)
 .beads/                   Issue DB (bd)
 ```
