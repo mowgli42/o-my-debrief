@@ -87,6 +87,8 @@ Feature: o-my Platform Debrief
     Then I can download a PDF or structured JSON/CSV bundle containing timeline summary, milestones list, key vehicle states, map view (or description), and full event log
     And the export is suitable for inclusion in mission reports or import into other tools
 
+# Post-mission analysis plots + 3-page PMR: see features/post-mission-analysis.feature (change add-sensor-plots-and-pdf-report)
+
   @integration @ecosystem
   Scenario: Recorder and display integrate with existing o-my / battlespace-manager workflows
     Given o-my is the source of OMS messages on redis

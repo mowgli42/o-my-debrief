@@ -6,10 +6,11 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from omy_debrief import __version__
 from omy_debrief import store
+from omy_debrief.report_pmr import build_pmr_html
 from omy_debrief.models.events import (
     CompareResult,
     DebriefEvent,
@@ -117,6 +118,39 @@ def summary(mission: str = Query(...)) -> dict[str, Any]:
         return store.mission_summary(mission)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/analysis/sensor-collects")
+def analysis_sensor_collects(mission: str = Query(...)) -> dict[str, Any]:
+    try:
+        return store.sensor_collect_analysis(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/analysis/sensor-telemetry")
+def analysis_sensor_telemetry(mission: str = Query(...)) -> dict[str, Any]:
+    try:
+        return store.sensor_telemetry_series(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/analysis/weapons-lar")
+def analysis_weapons_lar(mission: str = Query(...)) -> dict[str, Any]:
+    try:
+        return store.weapons_lar_analysis(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/report/pmr", response_class=HTMLResponse)
+def report_pmr(mission: str = Query(...)) -> HTMLResponse:
+    try:
+        body = build_pmr_html(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return HTMLResponse(content=body)
 
 
 @app.get("/api/milestone-rules")

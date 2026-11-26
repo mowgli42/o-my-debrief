@@ -31,6 +31,19 @@ OpenSpec: [`openspec/changes/add-plan-vs-actual-compare/`](openspec/changes/add-
 | `omd-2ek.4` | Map: subdued planned route under actual + toggle | closed |
 | `omd-2ek.5` | Docs + verification | closed |
 
+## Epic (open): Post-mission analysis + PMR PDF
+
+**`omd-pmr`** — Sensor FOV plots, LAR analysis, sensor telemetry panels, 3-page PMR
+
+OpenSpec: [`openspec/changes/add-sensor-plots-and-pdf-report/`](openspec/changes/add-sensor-plots-and-pdf-report/) · Gherkin: [`features/post-mission-analysis.feature`](features/post-mission-analysis.feature)
+
+| ID | Task | Status |
+|----|------|--------|
+| `omd-pmr.1` | Demo geometry + sensorStatus + LAR payloads | closed |
+| `omd-pmr.2` | Analysis API + `/api/report/pmr` | closed |
+| `omd-pmr.3` | Analysis UI (D3) + PMR print button | closed |
+| `omd-pmr.4` | Tests + docs | closed |
+
 ## Workflow
 
 ```bash

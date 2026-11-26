@@ -168,6 +168,49 @@ def test_plan_available(client: TestClient, data_root: Path) -> None:
     assert plan_strike["timestamp"] != executed["timestamp"]
 
 
+def test_analysis_sensor_collects(client: TestClient) -> None:
+    r = client.get(f"/api/analysis/sensor-collects?mission={MISSION_ID}")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["points"]) >= 4
+    assert body["points"][0].get("slant_range_nm") is not None
+    assert 0 <= body["metrics"]["success_rate"] <= 1
+
+
+def test_analysis_weapons_lar(client: TestClient) -> None:
+    r = client.get(f"/api/analysis/weapons-lar?mission={MISSION_ID}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["releases"]
+    assert body["lar_summary"]["in_lar"] >= 1
+    assert body["releases"][0]["within_lar"] is True
+
+
+def test_analysis_sensor_telemetry(client: TestClient) -> None:
+    r = client.get(f"/api/analysis/sensor-telemetry?mission={MISSION_ID}")
+    assert r.status_code == 200
+    samples = r.json()["samples"]
+    assert len(samples) > 5
+    assert any(s.get("health") for s in samples)
+
+
+def test_report_pmr_html(client: TestClient) -> None:
+    r = client.get(f"/api/report/pmr?mission={MISSION_ID}")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    html = r.text
+    assert "Mission Overview" in html
+    assert "Platform and Sensor Health" in html
+    assert "page-3-fov-details" in html
+
+
+def test_summary_analysis_rollups(client: TestClient) -> None:
+    r = client.get(f"/api/summary?mission={MISSION_ID}")
+    body = r.json()
+    assert "analysis" in body
+    assert body["stats"].get("lar_total") is not None
+
+
 def test_compare_fuzzy_and_unplanned(client: TestClient) -> None:
     r = client.get(f"/api/compare?mission={MISSION_ID}&tolerance_seconds=90")
     assert r.status_code == 200

@@ -161,11 +161,22 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
         (24.0, 37.02, 36.18, "IR", "TGT-042", "IR BDA confirmation pass", "clip-bda-ir-042"),
         (17.2, 37.03, 35.98, "EO", "TGT-061", "Unplanned opportunistic EO collect on TGT-061", None),
     ]
+    collect_geom = {
+        "EO": (11.4, 10.9, 480, 0.18, 2.1),
+        "IR": (9.8, 9.2, 310, 0.12, 1.7),
+        "SAR": (15.2, 14.6, 1250, 0.42, 8.5),
+    }
     for minutes, lat, lon, sensor, tgt, summary, clip_id in collects:
+        slant, ground, dia, area_km2, cone = collect_geom.get(sensor, (10.0, 9.5, 400, 0.2, 2.0))
         payload: dict[str, Any] = {
             "images": 3 if sensor == "EO" else 1,
             "size_gb": 2.1 if sensor == "EO" else 0.4,
             "mode": "spot",
+            "slant_range_nm": slant + (minutes % 3) * 0.15,
+            "ground_range_nm": ground + (minutes % 3) * 0.12,
+            "footprint_diameter_m": dia,
+            "footprint_area_km2": area_km2,
+            "cone_angle_deg": cone,
         }
         if clip_id:
             payload["media_clip_id"] = clip_id
@@ -184,6 +195,53 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
             marker="diamond",
             payload=payload,
         )
+        add(
+            minutes=minutes + 0.05,
+            event_type="sensorStatus",
+            topic="uci.sensor.status",
+            summary=f"{sensor} sensor status at collect",
+            sensor=sensor,
+            status="OK",
+            lat=lat,
+            lon=lon,
+            marker="none",
+            payload={
+                "sensor": sensor,
+                "health": "WARN" if sensor == "IR" and tgt == "TGT-042" else "OK",
+                "mode": "spot",
+                "operational_status": "collecting",
+                "gimbal_limit_pct": 88,
+                "temperature_c": 41.5 if sensor == "EO" else 38.0,
+                "signal_strength": 0.92,
+            },
+        )
+
+    # Periodic sensor telemetry between waypoints
+    for i, (lat, lon, label) in enumerate(WAYPOINTS):
+        t = i * 4.0 + 2.0
+        if i == 0 or i >= len(WAYPOINTS) - 1:
+            continue
+        for sensor, health in (("EO", "OK"), ("IR", "OK" if i != 3 else "WARN")):
+            add(
+                minutes=t,
+                event_type="sensorStatus",
+                topic="uci.sensor.status",
+                summary=f"{sensor} cruise telemetry near {label}",
+                sensor=sensor,
+                status=health,
+                lat=lat,
+                lon=lon,
+                marker="none",
+                payload={
+                    "sensor": sensor,
+                    "health": health,
+                    "mode": "search" if i < 5 else "track",
+                    "operational_status": "idle",
+                    "gimbal_limit_pct": 72 + i * 2,
+                    "temperature_c": 36.0 + i * 0.4,
+                    "signal_strength": 0.85 if i == 3 else 0.94,
+                },
+            )
 
     # Dissemination
     add(
@@ -218,16 +276,26 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
         lon=WAYPOINTS[5][1],
         status="ASSIGNED",
         marker="caret",
-        payload={"task_id": "STRK-01", "munitions": ["GBU-39", "GBU-39"], "effects": "destroy"},
+        payload={
+            "task_id": "STRK-01",
+            "munitions": ["GBU-39", "GBU-39"],
+            "effects": "destroy",
+            "lar": {
+                "center_lat": WAYPOINTS[5][0],
+                "center_lon": WAYPOINTS[5][1],
+                "radius_nm": 9.5,
+            },
+        },
     )
+    strike_lat, strike_lon = WAYPOINTS[5][0], WAYPOINTS[5][1]
     add(
         minutes=19.5,
         event_type="task",
         topic="uci.task.status",
         summary="Strike task STRK-01 EXECUTED — 2× GBU-39 released",
         target_id="TGT-042",
-        lat=WAYPOINTS[5][0],
-        lon=WAYPOINTS[5][1],
+        lat=strike_lat,
+        lon=strike_lon,
         status="EXECUTED",
         marker="caret",
         payload={
@@ -236,6 +304,16 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
             "weapons_bay": "open",
             "effects_reported": True,
             "media_clip_id": "clip-strike-042",
+            "lar": {
+                "center_lat": strike_lat,
+                "center_lon": strike_lon,
+                "radius_nm": 9.5,
+            },
+            "release": {
+                "slant_range_nm": 8.1,
+                "azimuth_deg": 274,
+                "within_lar": True,
+            },
         },
     )
 

@@ -42,6 +42,22 @@ export function fetchSummary(mission) {
   return get(`/api/summary?mission=${encodeURIComponent(mission)}`)
 }
 
+export function fetchSensorCollects(mission) {
+  return get(`/api/analysis/sensor-collects?mission=${encodeURIComponent(mission)}`)
+}
+
+export function fetchSensorTelemetry(mission) {
+  return get(`/api/analysis/sensor-telemetry?mission=${encodeURIComponent(mission)}`)
+}
+
+export function fetchWeaponsLar(mission) {
+  return get(`/api/analysis/weapons-lar?mission=${encodeURIComponent(mission)}`)
+}
+
+export function pmrReportUrl(mission) {
+  return `/api/report/pmr?mission=${encodeURIComponent(mission)}`
+}
+
 export function fetchPlan(mission) {
   return get(`/api/plan?mission=${encodeURIComponent(mission)}`)
 }

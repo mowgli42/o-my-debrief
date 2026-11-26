@@ -548,6 +548,20 @@ def mission_summary(mission_id: str) -> dict[str, Any]:
         lines.append(f"  ⚑ {b.timestamp} {b.title}{link}")
 
     narrative = "\n".join(lines)
+    collect_a = sensor_collect_analysis(mission_id)
+    lar_a = weapons_lar_analysis(mission_id)
+    lar_sum = lar_a.get("lar_summary") or {}
+    metrics = collect_a.get("metrics") or {}
+    analysis = {
+        "collect_success_rate": metrics.get("success_rate"),
+        "lar_compliance_pct": lar_sum.get("compliance_pct"),
+        "product_volume_gb": metrics.get("product_volume_gb"),
+        "lar_notes": (
+            f"{lar_sum.get('in_lar', 0)}/{lar_sum.get('total', 0)} releases inside LAR"
+            if lar_sum.get("total")
+            else "No weapon releases"
+        ),
+    }
     return {
         "mission_id": mission_id,
         "name": m.name,
@@ -559,7 +573,11 @@ def mission_summary(mission_id: str) -> dict[str, Any]:
             "bda_reports": len(bdas),
             "bda_linked": len(linked),
             "milestones": len(milestones),
+            "collect_success_rate": metrics.get("success_rate"),
+            "lar_in_lar": lar_sum.get("in_lar"),
+            "lar_total": lar_sum.get("total"),
         },
+        "analysis": analysis,
         "milestones": [ms.model_dump() for ms in milestones],
         "generator": "rule-based",
         "llm_hook": "Set DEBRIEF_LLM_SUMMARY=1 and provide adapter to replace narrative (future).",
@@ -735,3 +753,182 @@ def compare_plan_actual(
         unmatched_plan=unmatched_plan,
         unmatched_actual=unmatched_actual,
     )
+
+
+def _collect_point(ev: DebriefEvent) -> dict[str, Any]:
+    p = ev.payload or {}
+    return {
+        "event_id": ev.event_id,
+        "timestamp": ev.timestamp,
+        "sensor": ev.sensor,
+        "target_id": ev.target_id,
+        "status": ev.status,
+        "lat": ev.lat,
+        "lon": ev.lon,
+        "slant_range_nm": p.get("slant_range_nm"),
+        "ground_range_nm": p.get("ground_range_nm"),
+        "footprint_diameter_m": p.get("footprint_diameter_m"),
+        "footprint_area_km2": p.get("footprint_area_km2"),
+        "cone_angle_deg": p.get("cone_angle_deg"),
+        "unplanned": bool(p.get("unplanned")),
+    }
+
+
+def sensor_collect_analysis(mission_id: str) -> dict[str, Any]:
+    """Range / footprint scatter data + roll-up metrics."""
+    _manifest_for(mission_id)
+    collects = list_events(mission_id, types=["sensorCollect"])
+    success = [c for c in collects if (c.status or "").lower() in {"success", "ok"}]
+    points = [_collect_point(c) for c in success]
+    attempted = len(collects)
+    collected = len(success)
+    success_rate = (collected / attempted) if attempted else 0.0
+    unplanned = sum(1 for c in success if (c.payload or {}).get("unplanned"))
+    plan = load_plan(mission_id)
+    planned_collects = (
+        len([e for e in plan.events if e.event_type == "sensorCollect"]) if plan.available else 0
+    )
+    cmp = compare_plan_actual(mission_id) if plan.available else None
+    collect_pairs = len([p for p in (cmp.pairs if cmp else []) if p.kind == "collect"])
+    tasked_collected_pct = (
+        (collect_pairs / planned_collects) if planned_collects else 1.0 if collected else 0.0
+    )
+    volume_gb = 0.0
+    for c in success:
+        volume_gb += float((c.payload or {}).get("size_gb") or 0)
+    return {
+        "mission_id": mission_id,
+        "points": points,
+        "metrics": {
+            "attempted": attempted,
+            "collected": collected,
+            "success_rate": round(success_rate, 3),
+            "tasked_planned": planned_collects,
+            "unplanned": unplanned,
+            "tasked_collected_pct": round(tasked_collected_pct, 3),
+            "product_volume_gb": round(volume_gb, 2),
+        },
+    }
+
+
+def sensor_telemetry_series(mission_id: str) -> dict[str, Any]:
+    """Time-ordered sensorStatus (+ sparse systemStatus health) for multi-panel plots."""
+    _manifest_for(mission_id)
+    samples: list[dict[str, Any]] = []
+    for ev in list_events(mission_id, types=["sensorStatus"]):
+        p = ev.payload or {}
+        samples.append(
+            {
+                "timestamp": ev.timestamp,
+                "sensor": ev.sensor or p.get("sensor"),
+                "health": p.get("health") or ev.status,
+                "mode": p.get("mode"),
+                "status": p.get("operational_status") or p.get("status"),
+                "gimbal_limit_pct": p.get("gimbal_limit_pct"),
+                "temperature_c": p.get("temperature_c"),
+                "signal_strength": p.get("signal_strength"),
+            }
+        )
+    for ev in list_events(mission_id, types=["systemStatus"]):
+        p = ev.payload or {}
+        samples.append(
+            {
+                "timestamp": ev.timestamp,
+                "sensor": "PLAT",
+                "health": ev.status or "GREEN",
+                "mode": p.get("payload_mode"),
+                "status": "platform",
+                "fuel_percent": p.get("fuel_percent"),
+                "datalink_up": 1 if p.get("datalink_up") else 0,
+                "datalink_mbps": p.get("datalink_mbps"),
+            }
+        )
+    samples.sort(key=lambda s: s["timestamp"])
+    return {"mission_id": mission_id, "samples": samples}
+
+
+def weapons_lar_analysis(mission_id: str) -> dict[str, Any]:
+    """Release points vs circular LAR envelope on EXECUTED strike tasks."""
+    _manifest_for(mission_id)
+    releases: list[dict[str, Any]] = []
+    for ev in list_events(mission_id, types=["task"]):
+        if (ev.status or "").upper() != "EXECUTED":
+            continue
+        p = ev.payload or {}
+        if not p.get("munitions_released") and not p.get("effects_reported"):
+            continue
+        lar = p.get("lar") or {}
+        rel = p.get("release") or {}
+        within = rel.get("within_lar")
+        if within is None and lar.get("radius_nm") and rel.get("slant_range_nm") is not None:
+            within = float(rel["slant_range_nm"]) <= float(lar["radius_nm"]) + 0.01
+        releases.append(
+            {
+                "event_id": ev.event_id,
+                "timestamp": ev.timestamp,
+                "task_id": p.get("task_id"),
+                "target_id": ev.target_id,
+                "lat": ev.lat,
+                "lon": ev.lon,
+                "munitions": p.get("munitions_released") or [],
+                "lar_center_lat": lar.get("center_lat"),
+                "lar_center_lon": lar.get("center_lon"),
+                "lar_radius_nm": lar.get("radius_nm"),
+                "release_slant_range_nm": rel.get("slant_range_nm"),
+                "release_azimuth_deg": rel.get("azimuth_deg"),
+                "within_lar": bool(within) if within is not None else False,
+            }
+        )
+    in_lar = sum(1 for r in releases if r.get("within_lar"))
+    return {
+        "mission_id": mission_id,
+        "releases": releases,
+        "lar_summary": {"total": len(releases), "in_lar": in_lar, "compliance_pct": round(
+            (in_lar / len(releases)) if releases else 1.0, 3
+        )},
+    }
+
+
+def platform_health_summary(mission_id: str) -> dict[str, Any]:
+    """Uptime-style rollup for PMR page 2."""
+    _manifest_for(mission_id)
+    sys_rows = list_events(mission_id, types=["systemStatus"])
+    sensor_rows = list_events(mission_id, types=["sensorStatus"])
+    if not sys_rows:
+        return {
+            "readiness_uptime_pct": 0,
+            "datalink_uptime_pct": 0,
+            "sensor_uptime_pct": 0,
+            "degradations": [],
+            "narrative": "No platform status samples.",
+        }
+    green = sum(1 for e in sys_rows if (e.status or "").upper() == "GREEN")
+    link_up = sum(1 for e in sys_rows if (e.payload or {}).get("datalink_up"))
+    sensor_ok = sum(
+        1
+        for e in sensor_rows
+        if str((e.payload or {}).get("health") or e.status or "").upper() in {"OK", "GREEN"}
+    )
+    degradations: list[str] = []
+    for e in sys_rows:
+        if not (e.payload or {}).get("datalink_up"):
+            degradations.append(f"Datalink drop at {e.timestamp}")
+            break
+    for e in sensor_rows:
+        h = str((e.payload or {}).get("health") or "").upper()
+        if h == "WARN":
+            degradations.append(f"{e.sensor or 'Sensor'} WARN at {e.timestamp}")
+            break
+    n_sys = len(sys_rows)
+    n_sen = len(sensor_rows) or 1
+    narrative = (
+        f"Platform maintained GREEN on {green}/{n_sys} status samples; "
+        f"datalink up {link_up}/{n_sys}; sensors OK/WARN on {sensor_ok}/{n_sen} telemetry points."
+    )
+    return {
+        "readiness_uptime_pct": round(100 * green / n_sys, 1),
+        "datalink_uptime_pct": round(100 * link_up / n_sys, 1),
+        "sensor_uptime_pct": round(100 * sensor_ok / n_sen, 1),
+        "degradations": degradations,
+        "narrative": narrative,
+    }
