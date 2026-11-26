@@ -22,8 +22,11 @@
       .attr('height', height)
 
     const xKey = (d) => d.slant_range_nm ?? d.ground_range_nm ?? 0
-    const yKey = (d) =>
-      d.footprint_diameter_m ?? (d.footprint_area_km2 ?? 0) * 1000 ?? (d.cone_angle_deg ?? 0) * 40
+    const yKey = (d) => {
+      if (d.footprint_diameter_m != null) return d.footprint_diameter_m
+      if (d.footprint_area_km2 != null) return d.footprint_area_km2 * 1000
+      return (d.cone_angle_deg ?? 0) * 40
+    }
 
     const x = d3.scaleLinear().domain(d3.extent(points, xKey)).nice().range([0, innerW])
     const y = d3.scaleLinear().domain(d3.extent(points, yKey)).nice().range([innerH, 0])
