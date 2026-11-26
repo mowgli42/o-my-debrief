@@ -38,3 +38,4 @@ playwright-report/
 # Secrets (never commit private keys)
 *-key.pem
 *.key
+.beads.gate.lock
