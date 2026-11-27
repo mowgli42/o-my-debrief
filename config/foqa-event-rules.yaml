@@ -35,3 +35,25 @@ rules:
       source: other
       payload_isr_kind: fault
       confirmed: true
+  - id: egt_high
+    title: EGT above cruise band
+    severity: INFO
+    when:
+      source: systemStatus
+      field: payload.egt_c
+      gt: 560
+  - id: high_vs
+    title: High vertical speed
+    severity: INFO
+    when:
+      source: systemStatus
+      field: payload.vs_fpm
+      abs_gt: 2500
+  # Applied in store after XTE is computed (not raw payload)
+  - id: xte_exceed
+    title: Cross-track error exceedance
+    severity: WARN
+    when:
+      source: derived
+      field: xte_nm
+      gt: 0.8

@@ -7,21 +7,22 @@ lack a single post-flight view that reconstructs **aircraft** performance alongs
 sensor/mission activity on one clock—the FDM/FOQA pattern (synced plots, envelope
 events, planned-vs-actual parameters).
 
-## What changes (Phase 0–1 + FOQA event stub)
+## What changes (Phases 0–6)
 
-- **Flight Review** mode: one layout with shared scrub — geo track, multi-panel
-  air-data (alt/speed/fuel/attitude), systems-health strip, sensor/mission strip.
-- Preserve `currentTime` / `selectedEventId` when switching Debrief ↔ ISR ↔ Analysis
-  ↔ Compare ↔ Flight Review (Phase 0 clock unification).
-- Demo `systemStatus` enrichment: vertical speed, fuel flow, bus voltage, EGT proxy.
-- `GET /api/analysis/flight-review` — air series + FOQA-style threshold events +
-  rollup metrics for the workspace.
-- Config `config/foqa-event-rules.yaml` for envelope detectors (datalink drop, high
-  roll, low fuel, sensor fault linkage).
+- **Flight Review** mode: shared scrub — geo track, multi-panel air-data (alt/speed/
+  fuel/attitude + planned-vs-actual errors), systems-health strip, sensor strip.
+- Preserve `currentTime` / `selectedEventId` across Debrief ↔ ISR ↔ Analysis ↔
+  Compare ↔ Flight Review (Phase 0 clock unification).
+- Demo `systemStatus` enrichment: VS, fuel flow, bus V, EGT; plan `cmd_alt_ft` /
+  `cmd_speed_kts` for parameter compare.
+- `GET /api/analysis/flight-review` — air series, XTE / cmd errors, FOQA events,
+  exceedance stats, health timeline, planned-vs-actual rollups.
+- `config/foqa-event-rules.yaml` — datalink, roll, fuel, bus, EGT, VS, XTE, sensor fault.
+- `GET /api/report/flight-performance` — five-section print-HTML report.
+- `GET /api/analysis/fleet-trends` — multi-mission rollup (demo may be one mission).
 
 ## Non-goals (this change)
 
-- Multi-mission fleet trending
 - Full FADEC / propulsion fidelity
 - Live FDM uplink
 - Replacing ISR / Analysis / Compare (they remain; Flight Review composes them)

@@ -11,6 +11,7 @@
   import {
     fetchCompare,
     fetchEvents,
+    fetchFleetTrends,
     fetchFlightReview,
     fetchMedia,
     fetchMilestones,
@@ -62,6 +63,7 @@
   let sensorTelemetry = $state([])
   let isrAnalysis = $state(null)
   let flightReview = $state(null)
+  let fleetTrends = $state(null)
 
   function setExclusiveMode(mode) {
     // Phase 0: switch panes without resetting scrub / selection
@@ -106,7 +108,7 @@
     loading = true
     error = ''
     try {
-      const [ev, ms, wp, tr, md, plan, cmp, collects, telemetry, lar, isr, fr] = await Promise.all([
+      const [ev, ms, wp, tr, md, plan, cmp, collects, telemetry, lar, isr, fr, fleet] = await Promise.all([
         fetchEvents(id),
         fetchMilestones(id),
         fetchWaypoints(id),
@@ -119,6 +121,7 @@
         fetchWeaponsLar(id).catch(() => ({ releases: [], lar_summary: {} })),
         fetchSensorIsr(id).catch(() => null),
         fetchFlightReview(id).catch(() => null),
+        fetchFleetTrends().catch(() => null),
       ])
       events = ev
       milestones = ms
@@ -132,6 +135,7 @@
       weaponsLar = lar
       isrAnalysis = isr
       flightReview = fr
+      fleetTrends = fleet
       const m = missions.find((x) => x.mission_id === id)
       currentTime = m?.start_time || ev[0]?.timestamp
       await refreshState()
@@ -505,6 +509,8 @@
       <div class="min-h-0 lg:col-span-12">
         <FlightReviewDashboard
           review={flightReview}
+          {fleetTrends}
+          {missionId}
           {waypoints}
           {events}
           {track}

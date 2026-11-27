@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from collections import Counter
@@ -903,6 +904,46 @@ def load_foqa_rules() -> dict[str, Any]:
     return {"rules": []}
 
 
+def _haversine_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in nautical miles."""
+    r_nm = 3440.065
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlmb = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlmb / 2) ** 2
+    return 2 * r_nm * math.asin(min(1.0, math.sqrt(a)))
+
+
+def _cross_track_nm(
+    lat: float,
+    lon: float,
+    route: list[dict[str, Any]],
+) -> float | None:
+    """Min distance from point to planned route polyline (nm)."""
+    if lat is None or lon is None or len(route) < 2:
+        return None
+    best = None
+    for i in range(len(route) - 1):
+        a, b = route[i], route[i + 1]
+        # Approximate: nearest of segment endpoints + mid (ponytail; good enough for demo)
+        for pt in (
+            (a["lat"], a["lon"]),
+            (b["lat"], b["lon"]),
+            ((a["lat"] + b["lat"]) / 2, (a["lon"] + b["lon"]) / 2),
+        ):
+            d = _haversine_nm(lat, lon, float(pt[0]), float(pt[1]))
+            best = d if best is None else min(best, d)
+    return round(best, 3) if best is not None else None
+
+
+def _cmd_profile_at_index(route: list[dict[str, Any]], index: int) -> tuple[float | None, float | None]:
+    if not route:
+        return None, None
+    i = max(0, min(index, len(route) - 1))
+    r = route[i]
+    return r.get("cmd_alt_ft"), r.get("cmd_speed_kts")
+
+
 def flight_review_analysis(mission_id: str) -> dict[str, Any]:
     """FOQA-style air series + threshold events for Flight Review workspace."""
     m = _manifest_for(mission_id)
@@ -910,16 +951,27 @@ def flight_review_analysis(mission_id: str) -> dict[str, Any]:
     end = _parse_ts(m.end_time)
     duration_min = round(max(0.0, (end - start).total_seconds()) / 60.0, 1)
 
+    plan = load_plan(mission_id)
+    route = list(plan.route or []) if plan.available else []
+
+    status_events = list_events(mission_id, types=["systemStatus"])
     air_series: list[dict[str, Any]] = []
-    for ev in list_events(mission_id, types=["systemStatus"]):
+    for idx, ev in enumerate(status_events):
         p = ev.payload or {}
+        # Map sample index onto planned route profile
+        cmd_alt, cmd_spd = _cmd_profile_at_index(route, idx)
+        alt = p.get("alt_ft")
+        spd = p.get("speed_kts")
+        xte = _cross_track_nm(ev.lat, ev.lon, route) if route else None
+        alt_err = round(float(alt) - float(cmd_alt), 1) if alt is not None and cmd_alt is not None else None
+        spd_err = round(float(spd) - float(cmd_spd), 1) if spd is not None and cmd_spd is not None else None
         air_series.append(
             {
                 "timestamp": ev.timestamp,
                 "lat": ev.lat,
                 "lon": ev.lon,
-                "alt_ft": p.get("alt_ft"),
-                "speed_kts": p.get("speed_kts"),
+                "alt_ft": alt,
+                "speed_kts": spd,
                 "heading_deg": p.get("heading_deg"),
                 "roll_deg": p.get("roll_deg"),
                 "pitch_deg": p.get("pitch_deg"),
@@ -931,24 +983,37 @@ def flight_review_analysis(mission_id: str) -> dict[str, Any]:
                 "datalink_up": bool(p.get("datalink_up", True)),
                 "gear": p.get("gear"),
                 "readiness": ev.status,
+                "cmd_alt_ft": cmd_alt,
+                "cmd_speed_kts": cmd_spd,
+                "alt_error_ft": alt_err,
+                "spd_error_kts": spd_err,
+                "xte_nm": xte,
             }
         )
 
     events: list[dict[str, Any]] = []
     rules = load_foqa_rules().get("rules") or []
 
-    def _emit(rule: dict[str, Any], ev: DebriefEvent, detail: str) -> None:
+    def _emit(
+        rule: dict[str, Any],
+        *,
+        timestamp: str,
+        detail: str,
+        lat: float | None = None,
+        lon: float | None = None,
+        source_event_id: str = "",
+    ) -> None:
         events.append(
             {
-                "event_id": f"foqa-{rule.get('id')}-{ev.event_id}",
+                "event_id": f"foqa-{rule.get('id')}-{source_event_id or timestamp}",
                 "rule_id": rule.get("id"),
-                "timestamp": ev.timestamp,
+                "timestamp": timestamp,
                 "title": rule.get("title") or rule.get("id"),
                 "severity": rule.get("severity") or "INFO",
                 "detail": detail,
-                "lat": ev.lat,
-                "lon": ev.lon,
-                "source_event_id": ev.event_id,
+                "lat": lat,
+                "lon": lon,
+                "source_event_id": source_event_id,
             }
         )
 
@@ -957,7 +1022,7 @@ def flight_review_analysis(mission_id: str) -> dict[str, Any]:
         source = when.get("source") or "systemStatus"
         if source == "systemStatus":
             field = when.get("field") or ""
-            for ev in list_events(mission_id, types=["systemStatus"]):
+            for ev in status_events:
                 p = ev.payload or {}
                 val = _get_path({"payload": p}, field) if field.startswith("payload.") else None
                 matched = False
@@ -969,10 +1034,19 @@ def flight_review_analysis(mission_id: str) -> dict[str, Any]:
                         matched = val == expected
                 elif "lt" in when and val is not None:
                     matched = float(val) < float(when["lt"])
+                elif "gt" in when and val is not None:
+                    matched = float(val) > float(when["gt"])
                 elif "abs_gt" in when and val is not None:
                     matched = abs(float(val)) > float(when["abs_gt"])
                 if matched:
-                    _emit(rule, ev, f"{field}={val}")
+                    _emit(
+                        rule,
+                        timestamp=ev.timestamp,
+                        detail=f"{field}={val}",
+                        lat=ev.lat,
+                        lon=ev.lon,
+                        source_event_id=ev.event_id,
+                    )
         elif source == "other":
             for ev in list_events(mission_id, types=["other"]):
                 p = ev.payload or {}
@@ -980,7 +1054,36 @@ def flight_review_analysis(mission_id: str) -> dict[str, Any]:
                     continue
                 if "confirmed" in when and bool(p.get("confirmed")) is not bool(when["confirmed"]):
                     continue
-                _emit(rule, ev, ev.summary or p.get("subsystem") or "fault")
+                _emit(
+                    rule,
+                    timestamp=ev.timestamp,
+                    detail=ev.summary or p.get("subsystem") or "fault",
+                    lat=ev.lat,
+                    lon=ev.lon,
+                    source_event_id=ev.event_id,
+                )
+        elif source == "derived":
+            field = when.get("field") or ""
+            for sample, ev in zip(air_series, status_events):
+                val = sample.get(field)
+                if val is None:
+                    continue
+                matched = False
+                if "gt" in when:
+                    matched = float(val) > float(when["gt"])
+                elif "lt" in when:
+                    matched = float(val) < float(when["lt"])
+                elif "abs_gt" in when:
+                    matched = abs(float(val)) > float(when["abs_gt"])
+                if matched:
+                    _emit(
+                        rule,
+                        timestamp=sample["timestamp"],
+                        detail=f"{field}={val}",
+                        lat=sample.get("lat"),
+                        lon=sample.get("lon"),
+                        source_event_id=ev.event_id,
+                    )
 
     seen: set[str] = set()
     uniq: list[dict[str, Any]] = []
@@ -992,8 +1095,18 @@ def flight_review_analysis(mission_id: str) -> dict[str, Any]:
         uniq.append(e)
     uniq.sort(key=lambda e: e["timestamp"])
 
+    # Phase 3: exceedance stats by rule
+    exceedance_stats: dict[str, int] = {}
+    for e in uniq:
+        rid = str(e.get("rule_id") or "unknown")
+        exceedance_stats[rid] = exceedance_stats.get(rid, 0) + 1
+
     fuels = [s["fuel_percent"] for s in air_series if s.get("fuel_percent") is not None]
     alts = [s["alt_ft"] for s in air_series if s.get("alt_ft") is not None]
+    xtes = [s["xte_nm"] for s in air_series if s.get("xte_nm") is not None]
+    alt_errs = [abs(s["alt_error_ft"]) for s in air_series if s.get("alt_error_ft") is not None]
+    spd_errs = [abs(s["spd_error_kts"]) for s in air_series if s.get("spd_error_kts") is not None]
+
     metrics = {
         "duration_min": duration_min,
         "samples": len(air_series),
@@ -1001,9 +1114,34 @@ def flight_review_analysis(mission_id: str) -> dict[str, Any]:
         "min_alt_ft": min(alts) if alts else None,
         "fuel_start_pct": fuels[0] if fuels else None,
         "fuel_end_pct": fuels[-1] if fuels else None,
+        "fuel_burn_pct": round(fuels[0] - fuels[-1], 1) if len(fuels) >= 2 else None,
         "event_count": len(uniq),
         "warn_count": sum(1 for e in uniq if e.get("severity") == "WARN"),
+        "mean_xte_nm": round(sum(xtes) / len(xtes), 3) if xtes else None,
+        "max_xte_nm": max(xtes) if xtes else None,
+        "mean_abs_alt_error_ft": round(sum(alt_errs) / len(alt_errs), 1) if alt_errs else None,
+        "mean_abs_spd_error_kts": round(sum(spd_errs) / len(spd_errs), 1) if spd_errs else None,
+        "exceedance_stats": exceedance_stats,
     }
+
+    # Phase 4: aircraft health timeline
+    health_timeline: list[dict[str, Any]] = []
+    for s in air_series:
+        health_timeline.append(
+            {
+                "timestamp": s["timestamp"],
+                "datalink_up": s.get("datalink_up"),
+                "bus_ok": (s.get("bus_v") is None) or float(s["bus_v"]) >= 26.5,
+                "readiness": s.get("readiness"),
+                "gear": s.get("gear"),
+                "fuel_band": (
+                    "bingo"
+                    if s.get("fuel_percent") is not None and float(s["fuel_percent"]) < 60
+                    else "normal"
+                ),
+                "egt_ok": (s.get("egt_c") is None) or float(s["egt_c"]) <= 560,
+            }
+        )
 
     try:
         isr = sensor_isr_analysis(mission_id)
@@ -1022,6 +1160,60 @@ def flight_review_analysis(mission_id: str) -> dict[str, Any]:
         "events": uniq,
         "metrics": metrics,
         "sensor_strip": sensor_strip,
+        "health_timeline": health_timeline,
+        "planned_vs_actual": {
+            "available": bool(route),
+            "mean_xte_nm": metrics.get("mean_xte_nm"),
+            "max_xte_nm": metrics.get("max_xte_nm"),
+            "mean_abs_alt_error_ft": metrics.get("mean_abs_alt_error_ft"),
+            "mean_abs_spd_error_kts": metrics.get("mean_abs_spd_error_kts"),
+        },
+    }
+
+
+def fleet_trends_analysis() -> dict[str, Any]:
+    """Phase 6: multi-mission rollup across manifest (ponytail — demo may have one)."""
+    missions = load_manifest()
+    rows: list[dict[str, Any]] = []
+    for m in missions:
+        try:
+            fr = flight_review_analysis(m.mission_id)
+            isr = sensor_isr_analysis(m.mission_id)
+        except KeyError:
+            continue
+        met = fr.get("metrics") or {}
+        eng = isr.get("engineering") or {}
+        rows.append(
+            {
+                "mission_id": m.mission_id,
+                "name": m.name,
+                "duration_min": met.get("duration_min"),
+                "fuel_burn_pct": met.get("fuel_burn_pct"),
+                "warn_count": met.get("warn_count"),
+                "event_count": met.get("event_count"),
+                "mean_xte_nm": met.get("mean_xte_nm"),
+                "sensor_uptime_pct": eng.get("uptime_pct"),
+                "collections": len(isr.get("collections") or []),
+                "max_alt_ft": met.get("max_alt_ft"),
+            }
+        )
+    return {
+        "missions": rows,
+        "count": len(rows),
+        "aggregates": {
+            "mean_duration_min": round(
+                sum(r["duration_min"] or 0 for r in rows) / len(rows), 1
+            )
+            if rows
+            else None,
+            "mean_sensor_uptime_pct": round(
+                sum(r["sensor_uptime_pct"] or 0 for r in rows) / len(rows), 1
+            )
+            if rows
+            else None,
+            "total_warns": sum(r["warn_count"] or 0 for r in rows),
+            "total_collections": sum(r["collections"] or 0 for r in rows),
+        },
     }
 
 

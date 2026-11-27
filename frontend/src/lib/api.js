@@ -62,8 +62,16 @@ export function fetchFlightReview(mission) {
   return get(`/api/analysis/flight-review?mission=${encodeURIComponent(mission)}`)
 }
 
+export function fetchFleetTrends() {
+  return get('/api/analysis/fleet-trends')
+}
+
 export function pmrReportUrl(mission) {
   return `/api/report/pmr?mission=${encodeURIComponent(mission)}`
+}
+
+export function flightPerformanceReportUrl(mission) {
+  return `/api/report/flight-performance?mission=${encodeURIComponent(mission)}`
 }
 
 export function fetchPlan(mission) {

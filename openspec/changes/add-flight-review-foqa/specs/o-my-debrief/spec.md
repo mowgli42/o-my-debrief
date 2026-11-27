@@ -4,10 +4,14 @@
 
 The API SHALL expose `GET /api/analysis/flight-review?mission=…` returning:
 
-- `air_series` time-ordered samples (altitude, speed, fuel, attitude, and available
-  propulsion/electrical proxies)
+- `air_series` time-ordered samples (altitude, speed, fuel, attitude, propulsion/
+  electrical proxies, and planned-vs-actual fields: `cmd_alt_ft`, `cmd_speed_kts`,
+  `alt_error_ft`, `spd_error_kts`, `xte_nm`)
 - `events` FOQA-style threshold / anomaly events with timestamps and severity
-- `metrics` rollups (duration, max alt, fuel start/end, event counts)
+- `metrics` rollups (duration, max alt, fuel start/end, event counts,
+  `exceedance_stats`)
+- `health_timeline` per-sample systems flags (datalink, bus, EGT, fuel band)
+- `planned_vs_actual` rollup (mean/max XTE, mean abs alt/spd error)
 - Optional links to ISR / collect stats when present
 
 #### Scenario: Demo mission returns flight-review payload
@@ -15,8 +19,34 @@ The API SHALL expose `GET /api/analysis/flight-review?mission=…` returning:
 - **GIVEN** fixtures for `msn-demo-strike-recon`
 - **WHEN** client calls `GET /api/analysis/flight-review?mission=msn-demo-strike-recon`
 - **THEN** `air_series` has at least as many points as track samples
-- **AND** `events` is a list (may include datalink or envelope events)
-- **AND** `metrics.duration_min` is present
+- **AND** samples include `xte_nm` and `cmd_alt_ft` when a plan exists
+- **AND** `events` includes envelope detectors (e.g. datalink / XTE)
+- **AND** `metrics.duration_min` and `exceedance_stats` are present
+- **AND** `health_timeline` has matching sample count
+
+### Requirement: Flight Performance Report
+
+The API SHALL expose `GET /api/report/flight-performance?mission=…` returning
+printable HTML with five sections: Flight overview, Aircraft performance, Systems
+health, Mission execution, Post-flight assessment.
+
+#### Scenario: Demo mission flight performance report
+
+- **GIVEN** fixtures for `msn-demo-strike-recon`
+- **WHEN** client calls `GET /api/report/flight-performance?mission=msn-demo-strike-recon`
+- **THEN** the HTML includes all five section headings
+
+### Requirement: Fleet trends rollup
+
+The API SHALL expose `GET /api/analysis/fleet-trends` returning per-mission FOQA /
+sensor rollups across the manifest plus aggregates.
+
+#### Scenario: Manifest fleet trends
+
+- **GIVEN** at least one mission in the manifest
+- **WHEN** client calls `GET /api/analysis/fleet-trends`
+- **THEN** `missions` is a non-empty list
+- **AND** `aggregates` includes warn and collection totals
 
 ### Requirement: Flight Review workspace with shared clock
 

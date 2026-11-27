@@ -199,11 +199,17 @@ async function main() {
     await page.waitForTimeout(1400)
     await page.waitForSelector('text=Air-data', { timeout: 15000 })
     await shot(page, '20-flight-review.png')
-    const foqaBtn = page.getByRole('button').filter({ hasText: /Datalink drop|Fuel below|bus/i }).first()
+    const foqaBtn = page.getByRole('button').filter({ hasText: /Datalink drop|Fuel below|bus|Cross-track/i }).first()
     if (await foqaBtn.count()) {
       await foqaBtn.click()
       await page.waitForTimeout(600)
       await shot(page, '21-flight-review-foqa-event.png')
+    }
+    const health = page.getByText('Health timeline')
+    if (await health.count()) {
+      await health.scrollIntoViewIfNeeded()
+      await page.waitForTimeout(400)
+      await shot(page, '22-flight-review-health-fleet.png')
     }
   }
 
@@ -222,6 +228,15 @@ async function main() {
   await pmr.waitForTimeout(300)
   await shot(pmr, '16-pmr-page3-fov-details.png')
   await pmr.close()
+
+  // Five-section Flight Performance Report
+  const fpr = await browser.newPage({ viewport: { width: 900, height: 1100 } })
+  await fpr.goto(`${apiBase}/api/report/flight-performance?mission=msn-demo-strike-recon`, {
+    waitUntil: 'networkidle',
+  })
+  await fpr.waitForSelector('text=Aircraft Flight Performance Report', { timeout: 15000 })
+  await shot(fpr, '23-flight-performance-report.png')
+  await fpr.close()
 
   await browser.close()
   console.log('done')

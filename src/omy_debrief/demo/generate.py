@@ -483,13 +483,18 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
 def build_demo_plan(base: datetime | None = None) -> dict[str, Any]:
     """Planned route + events with intentional time skew vs as-executed."""
     base = base or datetime(2026, 7, 21, 14, 0, 0, tzinfo=UTC)
-    # Planned route: slight offset so map shows plan under / beside actual track
+    # Planned route: slight offset so map shows plan under / beside actual track.
+    # cmd_alt / cmd_speed enable FOQA planned-vs-actual parameter compare.
+    alt_plan = [200, 5000, 12500, 18000, 18500, 18000, 7000, 900]
+    spd_plan = [150, 290, 390, 425, 435, 425, 270, 160]
     route = [
         {
             "lat": lat + 0.012,
             "lon": lon - 0.008,
             "label": label,
             "index": i,
+            "cmd_alt_ft": alt_plan[i],
+            "cmd_speed_kts": spd_plan[i],
         }
         for i, (lat, lon, label) in enumerate(WAYPOINTS)
     ]

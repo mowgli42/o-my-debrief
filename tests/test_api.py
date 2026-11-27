@@ -215,6 +215,40 @@ def test_analysis_flight_review(client: TestClient) -> None:
     assert isinstance(body["events"], list)
     # Demo includes a datalink drop FOQA event
     assert any(e.get("rule_id") == "datalink_drop" for e in body["events"])
+    # Phase 2: planned vs actual fields on air series
+    sample = body["air_series"][0]
+    assert sample.get("cmd_alt_ft") is not None
+    assert sample.get("xte_nm") is not None
+    assert body["planned_vs_actual"]["available"] is True
+    assert body["planned_vs_actual"]["mean_xte_nm"] is not None
+    # Phase 3: richer detectors + exceedance rollup
+    assert any(e.get("rule_id") == "xte_exceed" for e in body["events"])
+    assert "xte_exceed" in body["metrics"]["exceedance_stats"]
+    # Phase 4: health timeline samples
+    assert len(body["health_timeline"]) >= 2
+    assert "datalink_up" in body["health_timeline"][0]
+
+
+def test_analysis_fleet_trends(client: TestClient) -> None:
+    r = client.get("/api/analysis/fleet-trends")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["count"] >= 1
+    assert any(m["mission_id"] == MISSION_ID for m in body["missions"])
+    assert "mean_sensor_uptime_pct" in body["aggregates"]
+
+
+def test_report_flight_performance(client: TestClient) -> None:
+    r = client.get(f"/api/report/flight-performance?mission={MISSION_ID}")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    html = r.text
+    assert "Aircraft Flight Performance Report" in html
+    assert "Flight overview" in html
+    assert "Aircraft performance" in html
+    assert "Systems health" in html
+    assert "Mission execution" in html
+    assert "Post-flight assessment" in html
 
 
 def test_analysis_sensor_isr(client: TestClient) -> None:

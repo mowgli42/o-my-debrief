@@ -57,7 +57,7 @@ OpenSpec: [`openspec/changes/add-eo-ir-isr-dashboard/`](openspec/changes/add-eo-
 | `omd-isr.3` | ISR UI map + Engineering/Operator modes | closed |
 | `omd-isr.4` | Tests + screenshots | closed |
 
-## Epic (open): Flight Review FOQA
+## Epic (closed): Flight Review FOQA
 
 **`omd-foqa`** — Synced flight review (air-data + health + FOQA events) on one clock
 
@@ -66,9 +66,10 @@ OpenSpec: [`openspec/changes/add-flight-review-foqa/`](openspec/changes/add-flig
 | ID | Task | Status |
 |----|------|--------|
 | `omd-foqa.1` | OpenSpec + demo airframe proxies + FOQA rules | closed |
-| `omd-foqa.2` | `GET /api/analysis/flight-review` | closed |
-| `omd-foqa.3` | Flight Review UI + shared scrub | closed |
-| `omd-foqa.4` | Tests + screenshots | closed |
+| `omd-foqa.2` | `GET /api/analysis/flight-review` (+ XTE / health / exceedance) | closed |
+| `omd-foqa.3` | Flight Review UI + shared scrub + plan-vs-actual / fleet | closed |
+| `omd-foqa.4` | Flight Performance Report + fleet-trends API | closed |
+| `omd-foqa.5` | Tests + screenshots 20–24 | closed |
 
 ## Workflow
 

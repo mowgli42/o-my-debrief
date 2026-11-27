@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from omy_debrief import __version__
 from omy_debrief import store
+from omy_debrief.report_flight import build_flight_performance_html
 from omy_debrief.report_pmr import build_pmr_html
 from omy_debrief.models.events import (
     CompareResult,
@@ -162,10 +163,26 @@ def analysis_flight_review(mission: str = Query(...)) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
 
 
+@app.get("/api/analysis/fleet-trends")
+def analysis_fleet_trends() -> dict[str, Any]:
+    """Multi-mission FOQA / sensor rollups across the manifest."""
+    return store.fleet_trends_analysis()
+
+
 @app.get("/api/report/pmr", response_class=HTMLResponse)
 def report_pmr(mission: str = Query(...)) -> HTMLResponse:
     try:
         body = build_pmr_html(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return HTMLResponse(content=body)
+
+
+@app.get("/api/report/flight-performance", response_class=HTMLResponse)
+def report_flight_performance(mission: str = Query(...)) -> HTMLResponse:
+    """Five-section Aircraft Flight Performance Report (print → PDF)."""
+    try:
+        body = build_flight_performance_html(mission)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     return HTMLResponse(content=body)

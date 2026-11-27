@@ -20,6 +20,15 @@
       ],
     },
     {
+      id: 'plan',
+      title: 'Planned vs actual',
+      keys: [
+        { key: 'xte_nm', label: 'XTE nm', color: '#f59e0b' },
+        { key: 'alt_error_ft', label: 'Δalt', color: '#4da3ff' },
+        { key: 'spd_error_kts', label: 'Δspd', color: '#5cd67e' },
+      ],
+    },
+    {
       id: 'att',
       title: 'Attitude',
       keys: [
