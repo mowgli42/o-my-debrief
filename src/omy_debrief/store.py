@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections import Counter
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -886,6 +887,165 @@ def weapons_lar_analysis(mission_id: str) -> dict[str, Any]:
         "lar_summary": {"total": len(releases), "in_lar": in_lar, "compliance_pct": round(
             (in_lar / len(releases)) if releases else 1.0, 3
         )},
+    }
+
+
+def sensor_isr_analysis(mission_id: str) -> dict[str, Any]:
+    """EO/IR ISR geospatial + engineering/operator rollups for the ISR dashboard."""
+    _manifest_for(mission_id)
+    manifests = {m.mission_id: m for m in load_manifest()}
+    m = manifests[mission_id]
+    start = _parse_ts(m.start_time)
+    end = _parse_ts(m.end_time)
+    duration_s = max(1.0, (end - start).total_seconds())
+
+    track = track_samples(mission_id)
+    fov_history: list[dict[str, Any]] = []
+    for ev in list_events(mission_id, types=["sensorStatus"]):
+        p = ev.payload or {}
+        if p.get("fov_radius_m") is None and not p.get("observing"):
+            continue
+        pointing = p.get("pointing") or {}
+        fov_history.append(
+            {
+                "event_id": ev.event_id,
+                "timestamp": ev.timestamp,
+                "sensor": ev.sensor or p.get("sensor"),
+                "lat": ev.lat,
+                "lon": ev.lon,
+                "fov_radius_m": p.get("fov_radius_m"),
+                "for_radius_m": p.get("for_radius_m"),
+                "pointing": pointing,
+                "health": p.get("health") or ev.status,
+                "mode": p.get("mode"),
+                "sharpness": p.get("sharpness"),
+                "latency_ms": p.get("latency_ms"),
+                "stabilization_ok": p.get("stabilization_ok"),
+                "observing": bool(p.get("observing") or p.get("operational_status") == "collecting"),
+            }
+        )
+
+    collections: list[dict[str, Any]] = []
+    for ev in list_events(mission_id, types=["sensorCollect"]):
+        p = ev.payload or {}
+        collections.append(
+            {
+                "event_id": ev.event_id,
+                "timestamp": ev.timestamp,
+                "sensor": ev.sensor,
+                "target_id": ev.target_id,
+                "lat": ev.lat,
+                "lon": ev.lon,
+                "footprint_diameter_m": p.get("footprint_diameter_m"),
+                "fov_radius_m": p.get("fov_radius_m") or ((p.get("footprint_diameter_m") or 0) / 2),
+                "quality_score": p.get("quality_score"),
+                "sharpness": p.get("sharpness"),
+                "latency_ms": p.get("latency_ms"),
+                "pointing": p.get("pointing"),
+                "outcome": p.get("outcome") or ev.status,
+                "unplanned": bool(p.get("unplanned")),
+                "status": ev.status,
+            }
+        )
+
+    detections: list[dict[str, Any]] = []
+    opportunities: list[dict[str, Any]] = []
+    faults: list[dict[str, Any]] = []
+    for ev in list_events(mission_id, types=["other"]):
+        p = ev.payload or {}
+        kind = p.get("isr_kind")
+        base = {
+            "event_id": ev.event_id,
+            "timestamp": ev.timestamp,
+            "sensor": ev.sensor,
+            "target_id": ev.target_id,
+            "lat": ev.lat,
+            "lon": ev.lon,
+            "summary": ev.summary,
+            "status": ev.status,
+            **{k: p[k] for k in p if k != "isr_kind"},
+            "isr_kind": kind,
+        }
+        if kind == "detection":
+            detections.append(base)
+        elif kind == "opportunity":
+            opportunities.append(base)
+        elif kind == "fault":
+            faults.append(base)
+
+    # Engineering metrics
+    sensor_rows = list_events(mission_id, types=["sensorStatus"])
+    ok = sum(
+        1
+        for e in sensor_rows
+        if str((e.payload or {}).get("health") or e.status or "").upper() in {"OK", "GREEN"}
+    )
+    n_sen = len(sensor_rows) or 1
+    pointing_errors = [
+        float((e.payload or {}).get("pointing", {}).get("az_error_deg") or 0)
+        for e in sensor_rows
+        if (e.payload or {}).get("pointing")
+    ]
+    qualities = [float(c["quality_score"]) for c in collections if c.get("quality_score") is not None]
+    latencies = [float(c["latency_ms"]) for c in collections if c.get("latency_ms") is not None]
+    observing_samples = sum(1 for f in fov_history if f.get("observing"))
+    engineering = {
+        "uptime_pct": round(100 * ok / n_sen, 1),
+        "mean_az_error_deg": round(sum(pointing_errors) / len(pointing_errors), 3)
+        if pointing_errors
+        else 0.0,
+        "mean_quality": round(sum(qualities) / len(qualities), 3) if qualities else None,
+        "mean_latency_ms": round(sum(latencies) / len(latencies), 1) if latencies else None,
+        "fault_count": len(faults),
+        "confirmed_faults": sum(1 for f in faults if f.get("confirmed")),
+        "stabilization_ok_pct": round(
+            100
+            * sum(1 for e in sensor_rows if (e.payload or {}).get("stabilization_ok", True))
+            / n_sen,
+            1,
+        ),
+    }
+
+    imaged_det = sum(1 for d in detections if d.get("imaged"))
+    operator = {
+        "observe_pct": round(100 * observing_samples / max(1, len(fov_history)), 1)
+        if fov_history
+        else 0.0,
+        "mission_duration_min": round(duration_s / 60.0, 1),
+        "collections": len(collections),
+        "detections": len(detections),
+        "detection_to_image_pct": round(100 * imaged_det / max(1, len(detections)), 1),
+        "opportunities_unused": len(opportunities),
+        "unplanned_collects": sum(1 for c in collections if c.get("unplanned")),
+        "fov_samples": len(fov_history),
+    }
+    tgt_counts = Counter(c.get("target_id") for c in collections if c.get("target_id"))
+    operator["revisits"] = sum(1 for _, n in tgt_counts.items() if n and n > 1)
+
+    events: list[dict[str, Any]] = []
+    for c in collections:
+        events.append({**c, "isr_kind": "collection"})
+    for d in detections:
+        events.append({**d, "isr_kind": "detection"})
+    for o in opportunities:
+        events.append({**o, "isr_kind": "opportunity"})
+    for f in faults:
+        events.append({**f, "isr_kind": "fault"})
+    for f in fov_history:
+        events.append({**f, "isr_kind": "fov"})
+    events.sort(key=lambda e: e.get("timestamp") or "")
+
+    return {
+        "mission_id": mission_id,
+        "track": track,
+        "fov_history": fov_history,
+        "collections": collections,
+        "detections": detections,
+        "opportunities": opportunities,
+        "faults": faults,
+        "engineering": engineering,
+        "operator": operator,
+        "events": events,
     }
 
 

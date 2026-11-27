@@ -204,6 +204,19 @@ def test_report_pmr_html(client: TestClient) -> None:
     assert "page-3-fov-details" in html
 
 
+def test_analysis_sensor_isr(client: TestClient) -> None:
+    r = client.get(f"/api/analysis/sensor-isr?mission={MISSION_ID}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["fov_history"]
+    assert body["collections"]
+    assert body["detections"]
+    assert body["opportunities"]
+    assert "uptime_pct" in body["engineering"]
+    assert "observe_pct" in body["operator"]
+    assert any(e.get("isr_kind") == "fault" for e in body["faults"])
+
+
 def test_summary_analysis_rollups(client: TestClient) -> None:
     r = client.get(f"/api/summary?mission={MISSION_ID}")
     body = r.json()
@@ -219,7 +232,11 @@ def test_compare_fuzzy_and_unplanned(client: TestClient) -> None:
     strike_pairs = [p for p in body["pairs"] if p["kind"] == "strike"]
     assert strike_pairs
     assert all(p["delta_seconds"] <= 90 for p in strike_pairs)
-    # Unplanned opportunistic collect on TGT-061
+    # Unplanned opportunistic collect on TGT-061 (not the detection cue)
     events = client.get(f"/api/events?mission={MISSION_ID}").json()
-    unplanned = next(e for e in events if e.get("target_id") == "TGT-061")
+    unplanned = next(
+        e
+        for e in events
+        if e.get("target_id") == "TGT-061" and e.get("event_type") == "sensorCollect"
+    )
     assert unplanned["event_id"] in body["unmatched_actual"]

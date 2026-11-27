@@ -144,6 +144,15 @@ def analysis_weapons_lar(mission: str = Query(...)) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
 
 
+@app.get("/api/analysis/sensor-isr")
+def analysis_sensor_isr(mission: str = Query(...)) -> dict[str, Any]:
+    """EO/IR ISR FOV, collections, detections, eng/ops rollups."""
+    try:
+        return store.sensor_isr_analysis(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 @app.get("/api/report/pmr", response_class=HTMLResponse)
 def report_pmr(mission: str = Query(...)) -> HTMLResponse:
     try:

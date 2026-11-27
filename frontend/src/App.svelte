@@ -5,6 +5,7 @@
   import Milestones from './lib/Milestones.svelte'
   import MissionMap from './lib/MissionMap.svelte'
   import AnalysisWorkbench from './lib/AnalysisWorkbench.svelte'
+  import IsrDashboard from './lib/IsrDashboard.svelte'
   import VehicleStatus from './lib/VehicleStatus.svelte'
   import {
     fetchCompare,
@@ -15,6 +16,7 @@
     fetchPlan,
     fetchPositionAt,
     fetchSensorCollects,
+    fetchSensorIsr,
     fetchSensorTelemetry,
     fetchStateAt,
     fetchSummary,
@@ -48,11 +50,14 @@
   let selectedEventId = $state(null)
   let compareMode = $state(false)
   let analysisMode = $state(false)
+  let isrMode = $state(false)
+  let isrPerspective = $state('engineering')
   let hidePlan = $state(false)
   let showPlannedRoute = $state(true)
   let collectAnalysis = $state({ points: [], metrics: {} })
   let weaponsLar = $state({ releases: [], lar_summary: {} })
   let sensorTelemetry = $state([])
+  let isrAnalysis = $state(null)
   let playTimer = null
   let videoChannel = null
   let videoWindow = null
@@ -89,7 +94,7 @@
     loading = true
     error = ''
     try {
-      const [ev, ms, wp, tr, md, plan, cmp, collects, telemetry, lar] = await Promise.all([
+      const [ev, ms, wp, tr, md, plan, cmp, collects, telemetry, lar, isr] = await Promise.all([
         fetchEvents(id),
         fetchMilestones(id),
         fetchWaypoints(id),
@@ -100,6 +105,7 @@
         fetchSensorCollects(id).catch(() => ({ points: [], metrics: {} })),
         fetchSensorTelemetry(id).catch(() => ({ samples: [] })),
         fetchWeaponsLar(id).catch(() => ({ releases: [], lar_summary: {} })),
+        fetchSensorIsr(id).catch(() => null),
       ])
       events = ev
       milestones = ms
@@ -111,6 +117,7 @@
       collectAnalysis = collects
       sensorTelemetry = telemetry.samples || []
       weaponsLar = lar
+      isrAnalysis = isr
       const m = missions.find((x) => x.mission_id === id)
       currentTime = m?.start_time || ev[0]?.timestamp
       await refreshState()
@@ -350,6 +357,25 @@
       <button
         type="button"
         class="rounded-sm border px-3 py-1.5 text-sm"
+        class:border-[var(--accent)]={isrMode}
+        class:bg-[rgba(61,214,198,0.12)]={isrMode}
+        class:text-[var(--accent)]={isrMode}
+        class:border-[var(--line)]={!isrMode}
+        class:bg-[var(--bg-elevated)]={!isrMode}
+        onclick={() => {
+          isrMode = !isrMode
+          if (isrMode) {
+            analysisMode = false
+            compareMode = false
+          }
+        }}
+        title="EO/IR ISR performance & utilization"
+      >
+        ISR
+      </button>
+      <button
+        type="button"
+        class="rounded-sm border px-3 py-1.5 text-sm"
         class:border-[var(--accent)]={analysisMode}
         class:bg-[rgba(61,214,198,0.12)]={analysisMode}
         class:text-[var(--accent)]={analysisMode}
@@ -357,7 +383,10 @@
         class:bg-[var(--bg-elevated)]={!analysisMode}
         onclick={() => {
           analysisMode = !analysisMode
-          if (analysisMode) compareMode = false
+          if (analysisMode) {
+            compareMode = false
+            isrMode = false
+          }
         }}
         title="Sensor FOV, LAR, and telemetry plots"
       >
@@ -373,7 +402,10 @@
         class:bg-[var(--bg-elevated)]={!compareMode}
         onclick={() => {
           compareMode = !compareMode
-          if (compareMode) analysisMode = false
+          if (compareMode) {
+            analysisMode = false
+            isrMode = false
+          }
         }}
         title={missionPlan?.available ? 'Plan vs as-executed' : 'No mission plan for this mission'}
       >
@@ -460,43 +492,55 @@
   </div>
 
   <main class="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-4 lg:grid-cols-12">
-    <div class="min-h-0 lg:col-span-3">
-      <Milestones
-        {milestones}
-        {currentTime}
-        selectedEventId={selectedEventId}
-        onselect={selectMilestone}
-        onopenVideo={openVideoViewer}
-      />
-    </div>
-    <div class="min-h-0 lg:col-span-6">
-      {#if analysisMode}
-        <AnalysisWorkbench
-          collectPoints={collectAnalysis.points || []}
-          collectMetrics={collectAnalysis.metrics || {}}
-          releases={weaponsLar.releases || []}
-          larSummary={weaponsLar.lar_summary || {}}
-          telemetry={sensorTelemetry}
+    {#if isrMode}
+      <div class="min-h-0 lg:col-span-12">
+        <IsrDashboard
+          isr={isrAnalysis}
           {currentTime}
+          bind:selectedEventId
+          bind:perspective={isrPerspective}
+          onscrub={scrub}
         />
-      {:else}
-        <MissionMap
-          {waypoints}
-          {events}
-          {track}
-          {plannedRoute}
-          bind:showPlannedRoute
-          platform={platformState}
-          {position}
+      </div>
+    {:else}
+      <div class="min-h-0 lg:col-span-3">
+        <Milestones
+          {milestones}
           {currentTime}
-          highlightEventId={selectedEventId}
-          {unmatchedActual}
+          selectedEventId={selectedEventId}
+          onselect={selectMilestone}
+          onopenVideo={openVideoViewer}
         />
-      {/if}
-    </div>
-    <div class="min-h-0 lg:col-span-3">
-      <VehicleStatus platform={platformState} {track} {currentTime} />
-    </div>
+      </div>
+      <div class="min-h-0 lg:col-span-6">
+        {#if analysisMode}
+          <AnalysisWorkbench
+            collectPoints={collectAnalysis.points || []}
+            collectMetrics={collectAnalysis.metrics || {}}
+            releases={weaponsLar.releases || []}
+            larSummary={weaponsLar.lar_summary || {}}
+            telemetry={sensorTelemetry}
+            {currentTime}
+          />
+        {:else}
+          <MissionMap
+            {waypoints}
+            {events}
+            {track}
+            {plannedRoute}
+            bind:showPlannedRoute
+            platform={platformState}
+            {position}
+            {currentTime}
+            highlightEventId={selectedEventId}
+            {unmatchedActual}
+          />
+        {/if}
+      </div>
+      <div class="min-h-0 lg:col-span-3">
+        <VehicleStatus platform={platformState} {track} {currentTime} />
+      </div>
+    {/if}
   </main>
 
   {#if summaryOpen}

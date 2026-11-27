@@ -54,6 +54,10 @@ export function fetchWeaponsLar(mission) {
   return get(`/api/analysis/weapons-lar?mission=${encodeURIComponent(mission)}`)
 }
 
+export function fetchSensorIsr(mission) {
+  return get(`/api/analysis/sensor-isr?mission=${encodeURIComponent(mission)}`)
+}
+
 export function pmrReportUrl(mission) {
   return `/api/report/pmr?mission=${encodeURIComponent(mission)}`
 }

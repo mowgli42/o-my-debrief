@@ -163,6 +163,31 @@ async function main() {
       await page.waitForTimeout(400)
       await shot(page, '13-analysis-sensor-telemetry.png')
     }
+    await analysis.click()
+    await page.waitForTimeout(400)
+  }
+
+  // EO/IR ISR dashboard — Engineering then Operator
+  const isr = page.getByRole('button', { name: 'ISR', exact: true })
+  if (await isr.count()) {
+    await isr.click()
+    await page.waitForTimeout(1400)
+    await page.waitForSelector('text=Engineering', { timeout: 15000 })
+    await shot(page, '17-isr-engineering.png')
+    const opBtn = page.getByRole('button', { name: 'Operator', exact: true })
+    if (await opBtn.count()) {
+      await opBtn.click()
+      await page.waitForTimeout(700)
+      await shot(page, '18-isr-operator.png')
+    }
+    // Click a collection-ish marker via map tooltip path: use page evaluate to fire select
+    // Fallback: click first leaflet circle path if present
+    const path = page.locator('.leaflet-overlay-pane path').first()
+    if (await path.count()) {
+      await path.click({ force: true })
+      await page.waitForTimeout(600)
+      await shot(page, '19-isr-event-inspector.png')
+    }
   }
 
   // Post Mission Report HTML (print-ready 3 pages)
