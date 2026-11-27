@@ -75,6 +75,7 @@ def load_rules() -> dict[str, Any]:
 def clear_cache() -> None:
     _read_table.cache_clear()
     load_rules.cache_clear()
+    load_foqa_rules.cache_clear()
 
 
 def _parse_ts(value: str) -> datetime:
@@ -887,6 +888,140 @@ def weapons_lar_analysis(mission_id: str) -> dict[str, Any]:
         "lar_summary": {"total": len(releases), "in_lar": in_lar, "compliance_pct": round(
             (in_lar / len(releases)) if releases else 1.0, 3
         )},
+    }
+
+
+def _foqa_rules_path() -> Path:
+    return Path(os.environ.get("DEBRIEF_FOQA_RULES", str(REPO_ROOT / "config" / "foqa-event-rules.yaml")))
+
+
+@lru_cache(maxsize=4)
+def load_foqa_rules() -> dict[str, Any]:
+    path = _foqa_rules_path()
+    if path.exists():
+        return yaml.safe_load(path.read_text()) or {"rules": []}
+    return {"rules": []}
+
+
+def flight_review_analysis(mission_id: str) -> dict[str, Any]:
+    """FOQA-style air series + threshold events for Flight Review workspace."""
+    m = _manifest_for(mission_id)
+    start = _parse_ts(m.start_time)
+    end = _parse_ts(m.end_time)
+    duration_min = round(max(0.0, (end - start).total_seconds()) / 60.0, 1)
+
+    air_series: list[dict[str, Any]] = []
+    for ev in list_events(mission_id, types=["systemStatus"]):
+        p = ev.payload or {}
+        air_series.append(
+            {
+                "timestamp": ev.timestamp,
+                "lat": ev.lat,
+                "lon": ev.lon,
+                "alt_ft": p.get("alt_ft"),
+                "speed_kts": p.get("speed_kts"),
+                "heading_deg": p.get("heading_deg"),
+                "roll_deg": p.get("roll_deg"),
+                "pitch_deg": p.get("pitch_deg"),
+                "fuel_percent": p.get("fuel_percent"),
+                "vs_fpm": p.get("vs_fpm"),
+                "fuel_flow_pph": p.get("fuel_flow_pph"),
+                "bus_v": p.get("bus_v"),
+                "egt_c": p.get("egt_c"),
+                "datalink_up": bool(p.get("datalink_up", True)),
+                "gear": p.get("gear"),
+                "readiness": ev.status,
+            }
+        )
+
+    events: list[dict[str, Any]] = []
+    rules = load_foqa_rules().get("rules") or []
+
+    def _emit(rule: dict[str, Any], ev: DebriefEvent, detail: str) -> None:
+        events.append(
+            {
+                "event_id": f"foqa-{rule.get('id')}-{ev.event_id}",
+                "rule_id": rule.get("id"),
+                "timestamp": ev.timestamp,
+                "title": rule.get("title") or rule.get("id"),
+                "severity": rule.get("severity") or "INFO",
+                "detail": detail,
+                "lat": ev.lat,
+                "lon": ev.lon,
+                "source_event_id": ev.event_id,
+            }
+        )
+
+    for rule in rules:
+        when = rule.get("when") or {}
+        source = when.get("source") or "systemStatus"
+        if source == "systemStatus":
+            field = when.get("field") or ""
+            for ev in list_events(mission_id, types=["systemStatus"]):
+                p = ev.payload or {}
+                val = _get_path({"payload": p}, field) if field.startswith("payload.") else None
+                matched = False
+                if "equals" in when:
+                    expected = when["equals"]
+                    if isinstance(expected, bool):
+                        matched = bool(val) is expected
+                    else:
+                        matched = val == expected
+                elif "lt" in when and val is not None:
+                    matched = float(val) < float(when["lt"])
+                elif "abs_gt" in when and val is not None:
+                    matched = abs(float(val)) > float(when["abs_gt"])
+                if matched:
+                    _emit(rule, ev, f"{field}={val}")
+        elif source == "other":
+            for ev in list_events(mission_id, types=["other"]):
+                p = ev.payload or {}
+                if when.get("payload_isr_kind") and p.get("isr_kind") != when["payload_isr_kind"]:
+                    continue
+                if "confirmed" in when and bool(p.get("confirmed")) is not bool(when["confirmed"]):
+                    continue
+                _emit(rule, ev, ev.summary or p.get("subsystem") or "fault")
+
+    seen: set[str] = set()
+    uniq: list[dict[str, Any]] = []
+    for e in events:
+        key = f"{e['rule_id']}:{e['source_event_id']}"
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(e)
+    uniq.sort(key=lambda e: e["timestamp"])
+
+    fuels = [s["fuel_percent"] for s in air_series if s.get("fuel_percent") is not None]
+    alts = [s["alt_ft"] for s in air_series if s.get("alt_ft") is not None]
+    metrics = {
+        "duration_min": duration_min,
+        "samples": len(air_series),
+        "max_alt_ft": max(alts) if alts else None,
+        "min_alt_ft": min(alts) if alts else None,
+        "fuel_start_pct": fuels[0] if fuels else None,
+        "fuel_end_pct": fuels[-1] if fuels else None,
+        "event_count": len(uniq),
+        "warn_count": sum(1 for e in uniq if e.get("severity") == "WARN"),
+    }
+
+    try:
+        isr = sensor_isr_analysis(mission_id)
+        sensor_strip = {
+            "collections": len(isr.get("collections") or []),
+            "detections": len(isr.get("detections") or []),
+            "opportunities_unused": len(isr.get("opportunities") or []),
+            "sensor_uptime_pct": (isr.get("engineering") or {}).get("uptime_pct"),
+        }
+    except Exception:
+        sensor_strip = {}
+
+    return {
+        "mission_id": mission_id,
+        "air_series": air_series,
+        "events": uniq,
+        "metrics": metrics,
+        "sensor_strip": sensor_strip,
     }
 
 

@@ -58,6 +58,10 @@ export function fetchSensorIsr(mission) {
   return get(`/api/analysis/sensor-isr?mission=${encodeURIComponent(mission)}`)
 }
 
+export function fetchFlightReview(mission) {
+  return get(`/api/analysis/flight-review?mission=${encodeURIComponent(mission)}`)
+}
+
 export function pmrReportUrl(mission) {
   return `/api/report/pmr?mission=${encodeURIComponent(mission)}`
 }

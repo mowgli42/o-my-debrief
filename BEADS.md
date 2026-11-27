@@ -44,7 +44,7 @@ OpenSpec: [`openspec/changes/add-sensor-plots-and-pdf-report/`](openspec/changes
 | `omd-pmr.3` | Analysis UI (D3) + PMR print button | closed |
 | `omd-pmr.4` | Tests + docs | closed |
 
-## Epic (open): EO/IR ISR dashboard
+## Epic: EO/IR ISR dashboard
 
 **`omd-isr`** — Airborne EO/IR sensor performance & utilization (eng + ops)
 
@@ -56,6 +56,19 @@ OpenSpec: [`openspec/changes/add-eo-ir-isr-dashboard/`](openspec/changes/add-eo-
 | `omd-isr.2` | `GET /api/analysis/sensor-isr` | closed |
 | `omd-isr.3` | ISR UI map + Engineering/Operator modes | closed |
 | `omd-isr.4` | Tests + screenshots | closed |
+
+## Epic (open): Flight Review FOQA
+
+**`omd-foqa`** — Synced flight review (air-data + health + FOQA events) on one clock
+
+OpenSpec: [`openspec/changes/add-flight-review-foqa/`](openspec/changes/add-flight-review-foqa/) · Gherkin: [`features/flight-review-foqa.feature`](features/flight-review-foqa.feature)
+
+| ID | Task | Status |
+|----|------|--------|
+| `omd-foqa.1` | OpenSpec + demo airframe proxies + FOQA rules | closed |
+| `omd-foqa.2` | `GET /api/analysis/flight-review` | closed |
+| `omd-foqa.3` | Flight Review UI + shared scrub | closed |
+| `omd-foqa.4` | Tests + screenshots | closed |
 
 ## Workflow
 

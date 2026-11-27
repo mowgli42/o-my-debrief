@@ -153,6 +153,15 @@ def analysis_sensor_isr(mission: str = Query(...)) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
 
 
+@app.get("/api/analysis/flight-review")
+def analysis_flight_review(mission: str = Query(...)) -> dict[str, Any]:
+    """FOQA-style air series + threshold events for Flight Review."""
+    try:
+        return store.flight_review_analysis(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 @app.get("/api/report/pmr", response_class=HTMLResponse)
 def report_pmr(mission: str = Query(...)) -> HTMLResponse:
     try:

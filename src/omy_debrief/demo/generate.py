@@ -135,6 +135,16 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
                 "speed_kts": speed_profile[i],
                 "roll_deg": round(6 * ((i % 3) - 1), 1),
                 "pitch_deg": pitch_profile[i],
+                # FOQA / Flight Review airframe proxies
+                "vs_fpm": round(
+                    0
+                    if i == 0
+                    else (alt_profile[i] - alt_profile[i - 1]) / 4.0 * 60.0 / 4.0,
+                    0,
+                ),
+                "fuel_flow_pph": round(850 - i * 35, 0),
+                "bus_v": 27.8 if i != 3 else 25.9,
+                "egt_c": round(520 + i * 8, 0),
                 "waypoint": label,
             },
         )

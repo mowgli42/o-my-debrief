@@ -6,10 +6,12 @@
   import MissionMap from './lib/MissionMap.svelte'
   import AnalysisWorkbench from './lib/AnalysisWorkbench.svelte'
   import IsrDashboard from './lib/IsrDashboard.svelte'
+  import FlightReviewDashboard from './lib/FlightReviewDashboard.svelte'
   import VehicleStatus from './lib/VehicleStatus.svelte'
   import {
     fetchCompare,
     fetchEvents,
+    fetchFlightReview,
     fetchMedia,
     fetchMilestones,
     fetchMissions,
@@ -51,6 +53,7 @@
   let compareMode = $state(false)
   let analysisMode = $state(false)
   let isrMode = $state(false)
+  let flightReviewMode = $state(false)
   let isrPerspective = $state('engineering')
   let hidePlan = $state(false)
   let showPlannedRoute = $state(true)
@@ -58,6 +61,15 @@
   let weaponsLar = $state({ releases: [], lar_summary: {} })
   let sensorTelemetry = $state([])
   let isrAnalysis = $state(null)
+  let flightReview = $state(null)
+
+  function setExclusiveMode(mode) {
+    // Phase 0: switch panes without resetting scrub / selection
+    flightReviewMode = mode === 'flight'
+    isrMode = mode === 'isr'
+    analysisMode = mode === 'analysis'
+    compareMode = mode === 'compare'
+  }
   let playTimer = null
   let videoChannel = null
   let videoWindow = null
@@ -94,7 +106,7 @@
     loading = true
     error = ''
     try {
-      const [ev, ms, wp, tr, md, plan, cmp, collects, telemetry, lar, isr] = await Promise.all([
+      const [ev, ms, wp, tr, md, plan, cmp, collects, telemetry, lar, isr, fr] = await Promise.all([
         fetchEvents(id),
         fetchMilestones(id),
         fetchWaypoints(id),
@@ -106,6 +118,7 @@
         fetchSensorTelemetry(id).catch(() => ({ samples: [] })),
         fetchWeaponsLar(id).catch(() => ({ releases: [], lar_summary: {} })),
         fetchSensorIsr(id).catch(() => null),
+        fetchFlightReview(id).catch(() => null),
       ])
       events = ev
       milestones = ms
@@ -118,6 +131,7 @@
       sensorTelemetry = telemetry.samples || []
       weaponsLar = lar
       isrAnalysis = isr
+      flightReview = fr
       const m = missions.find((x) => x.mission_id === id)
       currentTime = m?.start_time || ev[0]?.timestamp
       await refreshState()
@@ -357,18 +371,25 @@
       <button
         type="button"
         class="rounded-sm border px-3 py-1.5 text-sm"
+        class:border-[var(--accent)]={flightReviewMode}
+        class:bg-[rgba(61,214,198,0.12)]={flightReviewMode}
+        class:text-[var(--accent)]={flightReviewMode}
+        class:border-[var(--line)]={!flightReviewMode}
+        class:bg-[var(--bg-elevated)]={!flightReviewMode}
+        onclick={() => setExclusiveMode(flightReviewMode ? null : 'flight')}
+        title="FOQA-style flight review — air-data + health + mission on one clock"
+      >
+        Flight Review
+      </button>
+      <button
+        type="button"
+        class="rounded-sm border px-3 py-1.5 text-sm"
         class:border-[var(--accent)]={isrMode}
         class:bg-[rgba(61,214,198,0.12)]={isrMode}
         class:text-[var(--accent)]={isrMode}
         class:border-[var(--line)]={!isrMode}
         class:bg-[var(--bg-elevated)]={!isrMode}
-        onclick={() => {
-          isrMode = !isrMode
-          if (isrMode) {
-            analysisMode = false
-            compareMode = false
-          }
-        }}
+        onclick={() => setExclusiveMode(isrMode ? null : 'isr')}
         title="EO/IR ISR performance & utilization"
       >
         ISR
@@ -381,13 +402,7 @@
         class:text-[var(--accent)]={analysisMode}
         class:border-[var(--line)]={!analysisMode}
         class:bg-[var(--bg-elevated)]={!analysisMode}
-        onclick={() => {
-          analysisMode = !analysisMode
-          if (analysisMode) {
-            compareMode = false
-            isrMode = false
-          }
-        }}
+        onclick={() => setExclusiveMode(analysisMode ? null : 'analysis')}
         title="Sensor FOV, LAR, and telemetry plots"
       >
         Analysis
@@ -400,13 +415,7 @@
         class:text-[var(--accent)]={compareMode}
         class:border-[var(--line)]={!compareMode}
         class:bg-[var(--bg-elevated)]={!compareMode}
-        onclick={() => {
-          compareMode = !compareMode
-          if (compareMode) {
-            analysisMode = false
-            isrMode = false
-          }
-        }}
+        onclick={() => setExclusiveMode(compareMode ? null : 'compare')}
         title={missionPlan?.available ? 'Plan vs as-executed' : 'No mission plan for this mission'}
       >
         Compare
@@ -492,7 +501,24 @@
   </div>
 
   <main class="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-4 lg:grid-cols-12">
-    {#if isrMode}
+    {#if flightReviewMode}
+      <div class="min-h-0 lg:col-span-12">
+        <FlightReviewDashboard
+          review={flightReview}
+          {waypoints}
+          {events}
+          {track}
+          {plannedRoute}
+          bind:showPlannedRoute
+          platform={platformState}
+          {position}
+          {currentTime}
+          bind:selectedEventId
+          {unmatchedActual}
+          onscrub={scrub}
+        />
+      </div>
+    {:else if isrMode}
       <div class="min-h-0 lg:col-span-12">
         <IsrDashboard
           isr={isrAnalysis}

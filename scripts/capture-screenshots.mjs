@@ -188,6 +188,23 @@ async function main() {
       await page.waitForTimeout(600)
       await shot(page, '19-isr-event-inspector.png')
     }
+    await isr.click()
+    await page.waitForTimeout(400)
+  }
+
+  // Flight Review FOQA workspace
+  const flight = page.getByRole('button', { name: 'Flight Review' })
+  if (await flight.count()) {
+    await flight.click()
+    await page.waitForTimeout(1400)
+    await page.waitForSelector('text=Air-data', { timeout: 15000 })
+    await shot(page, '20-flight-review.png')
+    const foqaBtn = page.getByRole('button').filter({ hasText: /Datalink drop|Fuel below|bus/i }).first()
+    if (await foqaBtn.count()) {
+      await foqaBtn.click()
+      await page.waitForTimeout(600)
+      await shot(page, '21-flight-review-foqa-event.png')
+    }
   }
 
   // Post Mission Report HTML (print-ready 3 pages)

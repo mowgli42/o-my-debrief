@@ -204,6 +204,19 @@ def test_report_pmr_html(client: TestClient) -> None:
     assert "page-3-fov-details" in html
 
 
+def test_analysis_flight_review(client: TestClient) -> None:
+    r = client.get(f"/api/analysis/flight-review?mission={MISSION_ID}")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["air_series"]) >= 2
+    assert body["air_series"][0].get("alt_ft") is not None
+    assert "fuel_percent" in body["air_series"][0]
+    assert "duration_min" in body["metrics"]
+    assert isinstance(body["events"], list)
+    # Demo includes a datalink drop FOQA event
+    assert any(e.get("rule_id") == "datalink_drop" for e in body["events"])
+
+
 def test_analysis_sensor_isr(client: TestClient) -> None:
     r = client.get(f"/api/analysis/sensor-isr?mission={MISSION_ID}")
     assert r.status_code == 200
