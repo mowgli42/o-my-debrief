@@ -135,6 +135,16 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
                 "speed_kts": speed_profile[i],
                 "roll_deg": round(6 * ((i % 3) - 1), 1),
                 "pitch_deg": pitch_profile[i],
+                # FOQA / Flight Review airframe proxies
+                "vs_fpm": round(
+                    0
+                    if i == 0
+                    else (alt_profile[i] - alt_profile[i - 1]) / 4.0 * 60.0 / 4.0,
+                    0,
+                ),
+                "fuel_flow_pph": round(850 - i * 35, 0),
+                "bus_v": 27.8 if i != 3 else 25.9,
+                "egt_c": round(520 + i * 8, 0),
                 "waypoint": label,
             },
         )
@@ -161,11 +171,38 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
         (24.0, 37.02, 36.18, "IR", "TGT-042", "IR BDA confirmation pass", "clip-bda-ir-042"),
         (17.2, 37.03, 35.98, "EO", "TGT-061", "Unplanned opportunistic EO collect on TGT-061", None),
     ]
+    collect_geom = {
+        "EO": (11.4, 10.9, 480, 0.18, 2.1),
+        "IR": (9.8, 9.2, 310, 0.12, 1.7),
+        "SAR": (15.2, 14.6, 1250, 0.42, 8.5),
+    }
     for minutes, lat, lon, sensor, tgt, summary, clip_id in collects:
+        slant, ground, dia, area_km2, cone = collect_geom.get(sensor, (10.0, 9.5, 400, 0.2, 2.0))
+        quality = 0.72 if sensor == "IR" and "BDA" in summary else (0.91 if sensor == "EO" else 0.84)
+        sharpness = 0.68 if sensor == "IR" and tgt == "TGT-042" else 0.88
+        cmd_az, act_az = 214.0 + minutes, 214.4 + minutes + (0.8 if sensor == "IR" else 0.15)
         payload: dict[str, Any] = {
             "images": 3 if sensor == "EO" else 1,
             "size_gb": 2.1 if sensor == "EO" else 0.4,
             "mode": "spot",
+            "slant_range_nm": slant + (minutes % 3) * 0.15,
+            "ground_range_nm": ground + (minutes % 3) * 0.12,
+            "footprint_diameter_m": dia,
+            "footprint_area_km2": area_km2,
+            "cone_angle_deg": cone,
+            "quality_score": quality,
+            "sharpness": sharpness,
+            "latency_ms": 120 if sensor == "EO" else 180,
+            "pointing": {
+                "cmd_az_deg": round(cmd_az, 1),
+                "cmd_el_deg": -32.0,
+                "act_az_deg": round(act_az, 1),
+                "act_el_deg": -31.7,
+                "az_error_deg": round(abs(act_az - cmd_az), 2),
+            },
+            "fov_radius_m": dia / 2,
+            "for_radius_m": max(2500, dia * 3),
+            "outcome": "success",
         }
         if clip_id:
             payload["media_clip_id"] = clip_id
@@ -184,6 +221,168 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
             marker="diamond",
             payload=payload,
         )
+        add(
+            minutes=minutes + 0.05,
+            event_type="sensorStatus",
+            topic="uci.sensor.status",
+            summary=f"{sensor} sensor status at collect",
+            sensor=sensor,
+            status="OK",
+            lat=lat,
+            lon=lon,
+            marker="none",
+            payload={
+                "sensor": sensor,
+                "health": "WARN" if sensor == "IR" and tgt == "TGT-042" else "OK",
+                "mode": "spot",
+                "operational_status": "collecting",
+                "gimbal_limit_pct": 88,
+                "temperature_c": 41.5 if sensor == "EO" else 38.0,
+                "signal_strength": 0.92,
+                "pointing": payload["pointing"],
+                "fov_radius_m": dia / 2,
+                "for_radius_m": payload["for_radius_m"],
+                "stabilization_ok": sensor != "IR" or tgt != "TGT-042",
+                "sharpness": sharpness,
+                "latency_ms": payload["latency_ms"],
+            },
+        )
+
+    # Periodic sensor telemetry + FOV look-points between waypoints (EO/IR ISR)
+    for i, (lat, lon, label) in enumerate(WAYPOINTS):
+        t = i * 4.0 + 2.0
+        if i == 0 or i >= len(WAYPOINTS) - 1:
+            continue
+        for sensor, health in (("EO", "OK"), ("IR", "OK" if i != 3 else "WARN")):
+            fov_m = 220 if sensor == "EO" else 160
+            cmd = 40.0 + i * 12
+            err = 1.2 if health == "WARN" else 0.2
+            add(
+                minutes=t,
+                event_type="sensorStatus",
+                topic="uci.sensor.status",
+                summary=f"{sensor} cruise telemetry near {label}",
+                sensor=sensor,
+                status=health,
+                lat=lat,
+                lon=lon,
+                marker="none",
+                payload={
+                    "sensor": sensor,
+                    "health": health,
+                    "mode": "search" if i < 5 else "track",
+                    "operational_status": "idle" if i % 2 else "slew",
+                    "gimbal_limit_pct": 72 + i * 2,
+                    "temperature_c": 36.0 + i * 0.4,
+                    "signal_strength": 0.85 if i == 3 else 0.94,
+                    "pointing": {
+                        "cmd_az_deg": cmd,
+                        "cmd_el_deg": -28.0,
+                        "act_az_deg": cmd + err,
+                        "act_el_deg": -27.8,
+                        "az_error_deg": err,
+                    },
+                    "fov_radius_m": fov_m,
+                    "for_radius_m": 2800,
+                    "stabilization_ok": health == "OK",
+                    "sharpness": 0.7 if health == "WARN" else 0.9,
+                    "latency_ms": 140,
+                    "observing": True,
+                },
+            )
+
+    # Detections (cueing) — some lead to collects, one does not
+    detections = [
+        (7.6, 36.915, 35.695, "EO", "TGT-042", True),
+        (10.1, 36.938, 35.735, "IR", "TGT-042", True),
+        (11.6, 36.975, 35.815, "EO", "TGT-055", True),
+        (16.8, 37.028, 35.975, "EO", "TGT-061", True),
+        (18.0, 37.06, 36.01, "EO", "TGT-070", False),  # detected, not imaged
+    ]
+    for minutes, lat, lon, sensor, tgt, imaged in detections:
+        add(
+            minutes=minutes,
+            event_type="other",
+            topic="uci.sensor.detection",
+            summary=f"{sensor} detection on {tgt}" + ("" if imaged else " (no follow-on collect)"),
+            target_id=tgt,
+            lat=lat,
+            lon=lon,
+            sensor=sensor,
+            status="imaged" if imaged else "uncollected",
+            marker="circle",
+            payload={
+                "isr_kind": "detection",
+                "confidence": 0.81 if imaged else 0.64,
+                "imaged": imaged,
+                "snr": 12.4 if sensor == "EO" else 9.1,
+            },
+        )
+
+    # Unused / observable-but-not-collected opportunities inside FOR
+    opportunities = [
+        (9.2, 36.90, 35.68, "EO", "gap-north of TGT-042"),
+        (13.5, 36.99, 35.90, "EO", "gap-east of TGT-055"),
+        (18.4, 37.07, 36.02, "EO", "TGT-070 opportunity unused"),
+        (20.0, 37.08, 36.08, "IR", "post-IP thermal gap"),
+    ]
+    for minutes, lat, lon, sensor, label in opportunities:
+        add(
+            minutes=minutes,
+            event_type="other",
+            topic="uci.sensor.opportunity",
+            summary=f"Observable area not collected — {label}",
+            lat=lat,
+            lon=lon,
+            sensor=sensor,
+            status="unused",
+            marker="none",
+            payload={
+                "isr_kind": "opportunity",
+                "reason": "tasking_gap" if "TGT-070" in label else "not_selected",
+                "for_radius_m": 2800,
+                "fov_radius_m": 200,
+            },
+        )
+
+    # Engineering fault / anomaly
+    add(
+        minutes=12.1,
+        event_type="other",
+        topic="uci.sensor.fault",
+        summary="IR stabilizer transient — tracking jitter",
+        sensor="IR",
+        lat=WAYPOINTS[3][0],
+        lon=WAYPOINTS[3][1],
+        status="FAULT",
+        marker="none",
+        payload={
+            "isr_kind": "fault",
+            "subsystem": "stabilizer",
+            "severity": "WARN",
+            "confirmed": True,
+            "latency_ms": 240,
+            "az_error_deg": 1.4,
+        },
+    )
+    add(
+        minutes=15.0,
+        event_type="other",
+        topic="uci.sensor.fault",
+        summary="EO autofocus hunt — sharpness dip (potential)",
+        sensor="EO",
+        lat=37.01,
+        lon=35.90,
+        status="WARN",
+        marker="none",
+        payload={
+            "isr_kind": "fault",
+            "subsystem": "focus",
+            "severity": "INFO",
+            "confirmed": False,
+            "sharpness": 0.61,
+        },
+    )
 
     # Dissemination
     add(
@@ -218,16 +417,26 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
         lon=WAYPOINTS[5][1],
         status="ASSIGNED",
         marker="caret",
-        payload={"task_id": "STRK-01", "munitions": ["GBU-39", "GBU-39"], "effects": "destroy"},
+        payload={
+            "task_id": "STRK-01",
+            "munitions": ["GBU-39", "GBU-39"],
+            "effects": "destroy",
+            "lar": {
+                "center_lat": WAYPOINTS[5][0],
+                "center_lon": WAYPOINTS[5][1],
+                "radius_nm": 9.5,
+            },
+        },
     )
+    strike_lat, strike_lon = WAYPOINTS[5][0], WAYPOINTS[5][1]
     add(
         minutes=19.5,
         event_type="task",
         topic="uci.task.status",
         summary="Strike task STRK-01 EXECUTED — 2× GBU-39 released",
         target_id="TGT-042",
-        lat=WAYPOINTS[5][0],
-        lon=WAYPOINTS[5][1],
+        lat=strike_lat,
+        lon=strike_lon,
         status="EXECUTED",
         marker="caret",
         payload={
@@ -236,6 +445,16 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
             "weapons_bay": "open",
             "effects_reported": True,
             "media_clip_id": "clip-strike-042",
+            "lar": {
+                "center_lat": strike_lat,
+                "center_lon": strike_lon,
+                "radius_nm": 9.5,
+            },
+            "release": {
+                "slant_range_nm": 8.1,
+                "azimuth_deg": 274,
+                "within_lar": True,
+            },
         },
     )
 
@@ -264,13 +483,18 @@ def build_demo_events(base: datetime | None = None) -> list[dict[str, Any]]:
 def build_demo_plan(base: datetime | None = None) -> dict[str, Any]:
     """Planned route + events with intentional time skew vs as-executed."""
     base = base or datetime(2026, 7, 21, 14, 0, 0, tzinfo=UTC)
-    # Planned route: slight offset so map shows plan under / beside actual track
+    # Planned route: slight offset so map shows plan under / beside actual track.
+    # cmd_alt / cmd_speed enable FOQA planned-vs-actual parameter compare.
+    alt_plan = [200, 5000, 12500, 18000, 18500, 18000, 7000, 900]
+    spd_plan = [150, 290, 390, 425, 435, 425, 270, 160]
     route = [
         {
             "lat": lat + 0.012,
             "lon": lon - 0.008,
             "label": label,
             "index": i,
+            "cmd_alt_ft": alt_plan[i],
+            "cmd_speed_kts": spd_plan[i],
         }
         for i, (lat, lon, label) in enumerate(WAYPOINTS)
     ]

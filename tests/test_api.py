@@ -168,6 +168,109 @@ def test_plan_available(client: TestClient, data_root: Path) -> None:
     assert plan_strike["timestamp"] != executed["timestamp"]
 
 
+def test_analysis_sensor_collects(client: TestClient) -> None:
+    r = client.get(f"/api/analysis/sensor-collects?mission={MISSION_ID}")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["points"]) >= 4
+    assert body["points"][0].get("slant_range_nm") is not None
+    assert 0 <= body["metrics"]["success_rate"] <= 1
+
+
+def test_analysis_weapons_lar(client: TestClient) -> None:
+    r = client.get(f"/api/analysis/weapons-lar?mission={MISSION_ID}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["releases"]
+    assert body["lar_summary"]["in_lar"] >= 1
+    assert body["releases"][0]["within_lar"] is True
+
+
+def test_analysis_sensor_telemetry(client: TestClient) -> None:
+    r = client.get(f"/api/analysis/sensor-telemetry?mission={MISSION_ID}")
+    assert r.status_code == 200
+    samples = r.json()["samples"]
+    assert len(samples) > 5
+    assert any(s.get("health") for s in samples)
+
+
+def test_report_pmr_html(client: TestClient) -> None:
+    r = client.get(f"/api/report/pmr?mission={MISSION_ID}")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    html = r.text
+    assert "Mission Overview" in html
+    assert "Platform and Sensor Health" in html
+    assert "page-3-fov-details" in html
+
+
+def test_analysis_flight_review(client: TestClient) -> None:
+    r = client.get(f"/api/analysis/flight-review?mission={MISSION_ID}")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["air_series"]) >= 2
+    assert body["air_series"][0].get("alt_ft") is not None
+    assert "fuel_percent" in body["air_series"][0]
+    assert "duration_min" in body["metrics"]
+    assert isinstance(body["events"], list)
+    # Demo includes a datalink drop FOQA event
+    assert any(e.get("rule_id") == "datalink_drop" for e in body["events"])
+    # Phase 2: planned vs actual fields on air series
+    sample = body["air_series"][0]
+    assert sample.get("cmd_alt_ft") is not None
+    assert sample.get("xte_nm") is not None
+    assert body["planned_vs_actual"]["available"] is True
+    assert body["planned_vs_actual"]["mean_xte_nm"] is not None
+    # Phase 3: richer detectors + exceedance rollup
+    assert any(e.get("rule_id") == "xte_exceed" for e in body["events"])
+    assert "xte_exceed" in body["metrics"]["exceedance_stats"]
+    # Phase 4: health timeline samples
+    assert len(body["health_timeline"]) >= 2
+    assert "datalink_up" in body["health_timeline"][0]
+
+
+def test_analysis_fleet_trends(client: TestClient) -> None:
+    r = client.get("/api/analysis/fleet-trends")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["count"] >= 1
+    assert any(m["mission_id"] == MISSION_ID for m in body["missions"])
+    assert "mean_sensor_uptime_pct" in body["aggregates"]
+
+
+def test_report_flight_performance(client: TestClient) -> None:
+    r = client.get(f"/api/report/flight-performance?mission={MISSION_ID}")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    html = r.text
+    assert "Aircraft Flight Performance Report" in html
+    assert "Flight overview" in html
+    assert "Aircraft performance" in html
+    assert "Systems health" in html
+    assert "Mission execution" in html
+    assert "Post-flight assessment" in html
+
+
+def test_analysis_sensor_isr(client: TestClient) -> None:
+    r = client.get(f"/api/analysis/sensor-isr?mission={MISSION_ID}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["fov_history"]
+    assert body["collections"]
+    assert body["detections"]
+    assert body["opportunities"]
+    assert "uptime_pct" in body["engineering"]
+    assert "observe_pct" in body["operator"]
+    assert any(e.get("isr_kind") == "fault" for e in body["faults"])
+
+
+def test_summary_analysis_rollups(client: TestClient) -> None:
+    r = client.get(f"/api/summary?mission={MISSION_ID}")
+    body = r.json()
+    assert "analysis" in body
+    assert body["stats"].get("lar_total") is not None
+
+
 def test_compare_fuzzy_and_unplanned(client: TestClient) -> None:
     r = client.get(f"/api/compare?mission={MISSION_ID}&tolerance_seconds=90")
     assert r.status_code == 200
@@ -176,7 +279,11 @@ def test_compare_fuzzy_and_unplanned(client: TestClient) -> None:
     strike_pairs = [p for p in body["pairs"] if p["kind"] == "strike"]
     assert strike_pairs
     assert all(p["delta_seconds"] <= 90 for p in strike_pairs)
-    # Unplanned opportunistic collect on TGT-061
+    # Unplanned opportunistic collect on TGT-061 (not the detection cue)
     events = client.get(f"/api/events?mission={MISSION_ID}").json()
-    unplanned = next(e for e in events if e.get("target_id") == "TGT-061")
+    unplanned = next(
+        e
+        for e in events
+        if e.get("target_id") == "TGT-061" and e.get("event_type") == "sensorCollect"
+    )
     assert unplanned["event_id"] in body["unmatched_actual"]

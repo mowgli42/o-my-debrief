@@ -67,7 +67,11 @@ Open **http://127.0.0.1:8920**
 2. Scrub the timeline or hit **Play**  
 3. Click **Compare** — plan track above as-executed, pair links, glowing unplanned events; toggle **Hide mission plan** / **Planned route**  
 4. Click a milestone with a **Video** badge — scrub syncs; **Open video viewer** for the pop-out feed  
-5. **Export Debrief Report** downloads a JSON after-action bundle  
+5. **Flight Review** — FOQA-style synced map + air-data (incl. planned-vs-actual XTE/Δalt/Δspd) + health timeline + exceedance counts + fleet trends + five-section Flight Performance Report (shared scrub clock with other modes)  
+6. **ISR** — EO/IR sensor FOV map with Engineering / Operator perspectives (pointing, collections, detections, unused opportunities, faults)  
+7. **Analysis** — sensor range vs footprint, weapons LAR, and time-aligned sensor telemetry (scrub syncs playhead on plots)  
+8. **Generate Post Mission Report (PDF)** — opens print-ready 3-page HTML; use the browser print dialog to save as PDF  
+9. **Export Debrief Report** downloads a JSON after-action bundle  
 
 API smoke:
 

@@ -2,7 +2,7 @@
  * Capture debrief UI into docs/screenshots/
  * Requires API (:8020 default) and Vite (:5173 default).
  */
-import { chromium } from 'playwright'
+import { createRequire } from 'module'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs'
@@ -10,7 +10,10 @@ import fs from 'fs'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 const OUT = path.join(ROOT, 'docs', 'screenshots')
-const BASE = process.env.DEMO_URL || 'http://127.0.0.1:5173'
+const BASE = process.env.DEMO_URL || 'http://127.0.0.1:8920'
+// Resolve playwright from frontend/ even when this script lives under scripts/
+const require = createRequire(path.join(ROOT, 'frontend', 'package.json'))
+const { chromium } = require('playwright')
 
 async function shot(page, name) {
   const file = path.join(OUT, name)
@@ -141,7 +144,99 @@ async function main() {
       await shot(page, '11-planned-route-off.png')
       await plannedRoute.click()
     }
+    // Leave compare so Analysis can take the center pane
+    await compare.click()
+    await page.waitForTimeout(400)
   }
+
+  // Analysis mode: FOV scatter, LAR, sensor telemetry
+  const analysis = page.getByRole('button', { name: 'Analysis' })
+  if (await analysis.count()) {
+    await analysis.click()
+    await page.waitForTimeout(1200)
+    await page.waitForSelector('text=Sensor collect', { timeout: 15000 })
+    await shot(page, '12-analysis-fov-lar.png')
+    // Scroll telemetry into view within center panel
+    const telem = page.getByText('Sensor & platform telemetry')
+    if (await telem.count()) {
+      await telem.scrollIntoViewIfNeeded()
+      await page.waitForTimeout(400)
+      await shot(page, '13-analysis-sensor-telemetry.png')
+    }
+    await analysis.click()
+    await page.waitForTimeout(400)
+  }
+
+  // EO/IR ISR dashboard — Engineering then Operator
+  const isr = page.getByRole('button', { name: 'ISR', exact: true })
+  if (await isr.count()) {
+    await isr.click()
+    await page.waitForTimeout(1400)
+    await page.waitForSelector('text=Engineering', { timeout: 15000 })
+    await shot(page, '17-isr-engineering.png')
+    const opBtn = page.getByRole('button', { name: 'Operator', exact: true })
+    if (await opBtn.count()) {
+      await opBtn.click()
+      await page.waitForTimeout(700)
+      await shot(page, '18-isr-operator.png')
+    }
+    // Click a collection-ish marker via map tooltip path: use page evaluate to fire select
+    // Fallback: click first leaflet circle path if present
+    const path = page.locator('.leaflet-overlay-pane path').first()
+    if (await path.count()) {
+      await path.click({ force: true })
+      await page.waitForTimeout(600)
+      await shot(page, '19-isr-event-inspector.png')
+    }
+    await isr.click()
+    await page.waitForTimeout(400)
+  }
+
+  // Flight Review FOQA workspace
+  const flight = page.getByRole('button', { name: 'Flight Review' })
+  if (await flight.count()) {
+    await flight.click()
+    await page.waitForTimeout(1400)
+    await page.waitForSelector('text=Air-data', { timeout: 15000 })
+    await shot(page, '20-flight-review.png')
+    const foqaBtn = page.getByRole('button').filter({ hasText: /Datalink drop|Fuel below|bus|Cross-track/i }).first()
+    if (await foqaBtn.count()) {
+      await foqaBtn.click()
+      await page.waitForTimeout(600)
+      await shot(page, '21-flight-review-foqa-event.png')
+    }
+    const health = page.getByText('Health timeline')
+    if (await health.count()) {
+      await health.scrollIntoViewIfNeeded()
+      await page.waitForTimeout(400)
+      await shot(page, '22-flight-review-health-fleet.png')
+    }
+  }
+
+  // Post Mission Report HTML (print-ready 3 pages)
+  const apiBase = process.env.DEBRIEF_API || 'http://127.0.0.1:8020'
+  const pmr = await browser.newPage({ viewport: { width: 900, height: 1100 } })
+  await pmr.goto(`${apiBase}/api/report/pmr?mission=msn-demo-strike-recon`, {
+    waitUntil: 'networkidle',
+  })
+  await pmr.waitForSelector('text=Mission Overview', { timeout: 15000 })
+  await shot(pmr, '14-pmr-page1-overview.png')
+  await pmr.locator('#page-2-platform-sensor-health').scrollIntoViewIfNeeded()
+  await pmr.waitForTimeout(300)
+  await shot(pmr, '15-pmr-page2-health.png')
+  await pmr.locator('#page-3-fov-details').scrollIntoViewIfNeeded()
+  await pmr.waitForTimeout(300)
+  await shot(pmr, '16-pmr-page3-fov-details.png')
+  await pmr.close()
+
+  // Five-section Flight Performance Report
+  const fpr = await browser.newPage({ viewport: { width: 900, height: 1100 } })
+  await fpr.goto(`${apiBase}/api/report/flight-performance?mission=msn-demo-strike-recon`, {
+    waitUntil: 'networkidle',
+  })
+  await fpr.waitForSelector('text=Aircraft Flight Performance Report', { timeout: 15000 })
+  await shot(fpr, '23-flight-performance-report.png')
+  await fpr.close()
 
   await browser.close()
   console.log('done')

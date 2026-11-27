@@ -1,0 +1,59 @@
+# FOQA-style threshold detectors for Flight Review (ponytail demo rules)
+rules:
+  - id: datalink_drop
+    title: Datalink drop
+    severity: WARN
+    when:
+      source: systemStatus
+      field: payload.datalink_up
+      equals: false
+  - id: high_roll
+    title: High roll attitude
+    severity: INFO
+    when:
+      source: systemStatus
+      field: payload.roll_deg
+      abs_gt: 25
+  - id: low_fuel
+    title: Fuel below bingo band
+    severity: WARN
+    when:
+      source: systemStatus
+      field: payload.fuel_percent
+      lt: 60
+  - id: bus_low
+    title: Electrical bus undervoltage
+    severity: WARN
+    when:
+      source: systemStatus
+      field: payload.bus_v
+      lt: 26.5
+  - id: sensor_fault
+    title: Sensor fault / anomaly
+    severity: WARN
+    when:
+      source: other
+      payload_isr_kind: fault
+      confirmed: true
+  - id: egt_high
+    title: EGT above cruise band
+    severity: INFO
+    when:
+      source: systemStatus
+      field: payload.egt_c
+      gt: 560
+  - id: high_vs
+    title: High vertical speed
+    severity: INFO
+    when:
+      source: systemStatus
+      field: payload.vs_fpm
+      abs_gt: 2500
+  # Applied in store after XTE is computed (not raw payload)
+  - id: xte_exceed
+    title: Cross-track error exceedance
+    severity: WARN
+    when:
+      source: derived
+      field: xte_nm
+      gt: 0.8

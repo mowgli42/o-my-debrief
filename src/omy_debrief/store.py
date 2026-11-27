@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
+from collections import Counter
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -74,6 +76,7 @@ def load_rules() -> dict[str, Any]:
 def clear_cache() -> None:
     _read_table.cache_clear()
     load_rules.cache_clear()
+    load_foqa_rules.cache_clear()
 
 
 def _parse_ts(value: str) -> datetime:
@@ -548,6 +551,20 @@ def mission_summary(mission_id: str) -> dict[str, Any]:
         lines.append(f"  ⚑ {b.timestamp} {b.title}{link}")
 
     narrative = "\n".join(lines)
+    collect_a = sensor_collect_analysis(mission_id)
+    lar_a = weapons_lar_analysis(mission_id)
+    lar_sum = lar_a.get("lar_summary") or {}
+    metrics = collect_a.get("metrics") or {}
+    analysis = {
+        "collect_success_rate": metrics.get("success_rate"),
+        "lar_compliance_pct": lar_sum.get("compliance_pct"),
+        "product_volume_gb": metrics.get("product_volume_gb"),
+        "lar_notes": (
+            f"{lar_sum.get('in_lar', 0)}/{lar_sum.get('total', 0)} releases inside LAR"
+            if lar_sum.get("total")
+            else "No weapon releases"
+        ),
+    }
     return {
         "mission_id": mission_id,
         "name": m.name,
@@ -559,7 +576,11 @@ def mission_summary(mission_id: str) -> dict[str, Any]:
             "bda_reports": len(bdas),
             "bda_linked": len(linked),
             "milestones": len(milestones),
+            "collect_success_rate": metrics.get("success_rate"),
+            "lar_in_lar": lar_sum.get("in_lar"),
+            "lar_total": lar_sum.get("total"),
         },
+        "analysis": analysis,
         "milestones": [ms.model_dump() for ms in milestones],
         "generator": "rule-based",
         "llm_hook": "Set DEBRIEF_LLM_SUMMARY=1 and provide adapter to replace narrative (future).",
@@ -735,3 +756,666 @@ def compare_plan_actual(
         unmatched_plan=unmatched_plan,
         unmatched_actual=unmatched_actual,
     )
+
+
+def _collect_point(ev: DebriefEvent) -> dict[str, Any]:
+    p = ev.payload or {}
+    return {
+        "event_id": ev.event_id,
+        "timestamp": ev.timestamp,
+        "sensor": ev.sensor,
+        "target_id": ev.target_id,
+        "status": ev.status,
+        "lat": ev.lat,
+        "lon": ev.lon,
+        "slant_range_nm": p.get("slant_range_nm"),
+        "ground_range_nm": p.get("ground_range_nm"),
+        "footprint_diameter_m": p.get("footprint_diameter_m"),
+        "footprint_area_km2": p.get("footprint_area_km2"),
+        "cone_angle_deg": p.get("cone_angle_deg"),
+        "unplanned": bool(p.get("unplanned")),
+    }
+
+
+def sensor_collect_analysis(mission_id: str) -> dict[str, Any]:
+    """Range / footprint scatter data + roll-up metrics."""
+    _manifest_for(mission_id)
+    collects = list_events(mission_id, types=["sensorCollect"])
+    success = [c for c in collects if (c.status or "").lower() in {"success", "ok"}]
+    points = [_collect_point(c) for c in success]
+    attempted = len(collects)
+    collected = len(success)
+    success_rate = (collected / attempted) if attempted else 0.0
+    unplanned = sum(1 for c in success if (c.payload or {}).get("unplanned"))
+    plan = load_plan(mission_id)
+    planned_collects = (
+        len([e for e in plan.events if e.event_type == "sensorCollect"]) if plan.available else 0
+    )
+    cmp = compare_plan_actual(mission_id) if plan.available else None
+    collect_pairs = len([p for p in (cmp.pairs if cmp else []) if p.kind == "collect"])
+    tasked_collected_pct = (
+        (collect_pairs / planned_collects) if planned_collects else 1.0 if collected else 0.0
+    )
+    volume_gb = 0.0
+    for c in success:
+        volume_gb += float((c.payload or {}).get("size_gb") or 0)
+    return {
+        "mission_id": mission_id,
+        "points": points,
+        "metrics": {
+            "attempted": attempted,
+            "collected": collected,
+            "success_rate": round(success_rate, 3),
+            "tasked_planned": planned_collects,
+            "unplanned": unplanned,
+            "tasked_collected_pct": round(tasked_collected_pct, 3),
+            "product_volume_gb": round(volume_gb, 2),
+        },
+    }
+
+
+def sensor_telemetry_series(mission_id: str) -> dict[str, Any]:
+    """Time-ordered sensorStatus (+ sparse systemStatus health) for multi-panel plots."""
+    _manifest_for(mission_id)
+    samples: list[dict[str, Any]] = []
+    for ev in list_events(mission_id, types=["sensorStatus"]):
+        p = ev.payload or {}
+        samples.append(
+            {
+                "timestamp": ev.timestamp,
+                "sensor": ev.sensor or p.get("sensor"),
+                "health": p.get("health") or ev.status,
+                "mode": p.get("mode"),
+                "status": p.get("operational_status") or p.get("status"),
+                "gimbal_limit_pct": p.get("gimbal_limit_pct"),
+                "temperature_c": p.get("temperature_c"),
+                "signal_strength": p.get("signal_strength"),
+            }
+        )
+    for ev in list_events(mission_id, types=["systemStatus"]):
+        p = ev.payload or {}
+        samples.append(
+            {
+                "timestamp": ev.timestamp,
+                "sensor": "PLAT",
+                "health": ev.status or "GREEN",
+                "mode": p.get("payload_mode"),
+                "status": "platform",
+                "fuel_percent": p.get("fuel_percent"),
+                "datalink_up": 1 if p.get("datalink_up") else 0,
+                "datalink_mbps": p.get("datalink_mbps"),
+            }
+        )
+    samples.sort(key=lambda s: s["timestamp"])
+    return {"mission_id": mission_id, "samples": samples}
+
+
+def weapons_lar_analysis(mission_id: str) -> dict[str, Any]:
+    """Release points vs circular LAR envelope on EXECUTED strike tasks."""
+    _manifest_for(mission_id)
+    releases: list[dict[str, Any]] = []
+    for ev in list_events(mission_id, types=["task"]):
+        if (ev.status or "").upper() != "EXECUTED":
+            continue
+        p = ev.payload or {}
+        if not p.get("munitions_released") and not p.get("effects_reported"):
+            continue
+        lar = p.get("lar") or {}
+        rel = p.get("release") or {}
+        within = rel.get("within_lar")
+        if within is None and lar.get("radius_nm") and rel.get("slant_range_nm") is not None:
+            within = float(rel["slant_range_nm"]) <= float(lar["radius_nm"]) + 0.01
+        releases.append(
+            {
+                "event_id": ev.event_id,
+                "timestamp": ev.timestamp,
+                "task_id": p.get("task_id"),
+                "target_id": ev.target_id,
+                "lat": ev.lat,
+                "lon": ev.lon,
+                "munitions": p.get("munitions_released") or [],
+                "lar_center_lat": lar.get("center_lat"),
+                "lar_center_lon": lar.get("center_lon"),
+                "lar_radius_nm": lar.get("radius_nm"),
+                "release_slant_range_nm": rel.get("slant_range_nm"),
+                "release_azimuth_deg": rel.get("azimuth_deg"),
+                "within_lar": bool(within) if within is not None else False,
+            }
+        )
+    in_lar = sum(1 for r in releases if r.get("within_lar"))
+    return {
+        "mission_id": mission_id,
+        "releases": releases,
+        "lar_summary": {"total": len(releases), "in_lar": in_lar, "compliance_pct": round(
+            (in_lar / len(releases)) if releases else 1.0, 3
+        )},
+    }
+
+
+def _foqa_rules_path() -> Path:
+    return Path(os.environ.get("DEBRIEF_FOQA_RULES", str(REPO_ROOT / "config" / "foqa-event-rules.yaml")))
+
+
+@lru_cache(maxsize=4)
+def load_foqa_rules() -> dict[str, Any]:
+    path = _foqa_rules_path()
+    if path.exists():
+        return yaml.safe_load(path.read_text()) or {"rules": []}
+    return {"rules": []}
+
+
+def _haversine_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in nautical miles."""
+    r_nm = 3440.065
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlmb = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlmb / 2) ** 2
+    return 2 * r_nm * math.asin(min(1.0, math.sqrt(a)))
+
+
+def _cross_track_nm(
+    lat: float,
+    lon: float,
+    route: list[dict[str, Any]],
+) -> float | None:
+    """Min distance from point to planned route polyline (nm)."""
+    if lat is None or lon is None or len(route) < 2:
+        return None
+    best = None
+    for i in range(len(route) - 1):
+        a, b = route[i], route[i + 1]
+        # Approximate: nearest of segment endpoints + mid (ponytail; good enough for demo)
+        for pt in (
+            (a["lat"], a["lon"]),
+            (b["lat"], b["lon"]),
+            ((a["lat"] + b["lat"]) / 2, (a["lon"] + b["lon"]) / 2),
+        ):
+            d = _haversine_nm(lat, lon, float(pt[0]), float(pt[1]))
+            best = d if best is None else min(best, d)
+    return round(best, 3) if best is not None else None
+
+
+def _cmd_profile_at_index(route: list[dict[str, Any]], index: int) -> tuple[float | None, float | None]:
+    if not route:
+        return None, None
+    i = max(0, min(index, len(route) - 1))
+    r = route[i]
+    return r.get("cmd_alt_ft"), r.get("cmd_speed_kts")
+
+
+def flight_review_analysis(mission_id: str) -> dict[str, Any]:
+    """FOQA-style air series + threshold events for Flight Review workspace."""
+    m = _manifest_for(mission_id)
+    start = _parse_ts(m.start_time)
+    end = _parse_ts(m.end_time)
+    duration_min = round(max(0.0, (end - start).total_seconds()) / 60.0, 1)
+
+    plan = load_plan(mission_id)
+    route = list(plan.route or []) if plan.available else []
+
+    status_events = list_events(mission_id, types=["systemStatus"])
+    air_series: list[dict[str, Any]] = []
+    for idx, ev in enumerate(status_events):
+        p = ev.payload or {}
+        # Map sample index onto planned route profile
+        cmd_alt, cmd_spd = _cmd_profile_at_index(route, idx)
+        alt = p.get("alt_ft")
+        spd = p.get("speed_kts")
+        xte = _cross_track_nm(ev.lat, ev.lon, route) if route else None
+        alt_err = round(float(alt) - float(cmd_alt), 1) if alt is not None and cmd_alt is not None else None
+        spd_err = round(float(spd) - float(cmd_spd), 1) if spd is not None and cmd_spd is not None else None
+        air_series.append(
+            {
+                "timestamp": ev.timestamp,
+                "lat": ev.lat,
+                "lon": ev.lon,
+                "alt_ft": alt,
+                "speed_kts": spd,
+                "heading_deg": p.get("heading_deg"),
+                "roll_deg": p.get("roll_deg"),
+                "pitch_deg": p.get("pitch_deg"),
+                "fuel_percent": p.get("fuel_percent"),
+                "vs_fpm": p.get("vs_fpm"),
+                "fuel_flow_pph": p.get("fuel_flow_pph"),
+                "bus_v": p.get("bus_v"),
+                "egt_c": p.get("egt_c"),
+                "datalink_up": bool(p.get("datalink_up", True)),
+                "gear": p.get("gear"),
+                "readiness": ev.status,
+                "cmd_alt_ft": cmd_alt,
+                "cmd_speed_kts": cmd_spd,
+                "alt_error_ft": alt_err,
+                "spd_error_kts": spd_err,
+                "xte_nm": xte,
+            }
+        )
+
+    events: list[dict[str, Any]] = []
+    rules = load_foqa_rules().get("rules") or []
+
+    def _emit(
+        rule: dict[str, Any],
+        *,
+        timestamp: str,
+        detail: str,
+        lat: float | None = None,
+        lon: float | None = None,
+        source_event_id: str = "",
+    ) -> None:
+        events.append(
+            {
+                "event_id": f"foqa-{rule.get('id')}-{source_event_id or timestamp}",
+                "rule_id": rule.get("id"),
+                "timestamp": timestamp,
+                "title": rule.get("title") or rule.get("id"),
+                "severity": rule.get("severity") or "INFO",
+                "detail": detail,
+                "lat": lat,
+                "lon": lon,
+                "source_event_id": source_event_id,
+            }
+        )
+
+    for rule in rules:
+        when = rule.get("when") or {}
+        source = when.get("source") or "systemStatus"
+        if source == "systemStatus":
+            field = when.get("field") or ""
+            for ev in status_events:
+                p = ev.payload or {}
+                val = _get_path({"payload": p}, field) if field.startswith("payload.") else None
+                matched = False
+                if "equals" in when:
+                    expected = when["equals"]
+                    if isinstance(expected, bool):
+                        matched = bool(val) is expected
+                    else:
+                        matched = val == expected
+                elif "lt" in when and val is not None:
+                    matched = float(val) < float(when["lt"])
+                elif "gt" in when and val is not None:
+                    matched = float(val) > float(when["gt"])
+                elif "abs_gt" in when and val is not None:
+                    matched = abs(float(val)) > float(when["abs_gt"])
+                if matched:
+                    _emit(
+                        rule,
+                        timestamp=ev.timestamp,
+                        detail=f"{field}={val}",
+                        lat=ev.lat,
+                        lon=ev.lon,
+                        source_event_id=ev.event_id,
+                    )
+        elif source == "other":
+            for ev in list_events(mission_id, types=["other"]):
+                p = ev.payload or {}
+                if when.get("payload_isr_kind") and p.get("isr_kind") != when["payload_isr_kind"]:
+                    continue
+                if "confirmed" in when and bool(p.get("confirmed")) is not bool(when["confirmed"]):
+                    continue
+                _emit(
+                    rule,
+                    timestamp=ev.timestamp,
+                    detail=ev.summary or p.get("subsystem") or "fault",
+                    lat=ev.lat,
+                    lon=ev.lon,
+                    source_event_id=ev.event_id,
+                )
+        elif source == "derived":
+            field = when.get("field") or ""
+            for sample, ev in zip(air_series, status_events):
+                val = sample.get(field)
+                if val is None:
+                    continue
+                matched = False
+                if "gt" in when:
+                    matched = float(val) > float(when["gt"])
+                elif "lt" in when:
+                    matched = float(val) < float(when["lt"])
+                elif "abs_gt" in when:
+                    matched = abs(float(val)) > float(when["abs_gt"])
+                if matched:
+                    _emit(
+                        rule,
+                        timestamp=sample["timestamp"],
+                        detail=f"{field}={val}",
+                        lat=sample.get("lat"),
+                        lon=sample.get("lon"),
+                        source_event_id=ev.event_id,
+                    )
+
+    seen: set[str] = set()
+    uniq: list[dict[str, Any]] = []
+    for e in events:
+        key = f"{e['rule_id']}:{e['source_event_id']}"
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(e)
+    uniq.sort(key=lambda e: e["timestamp"])
+
+    # Phase 3: exceedance stats by rule
+    exceedance_stats: dict[str, int] = {}
+    for e in uniq:
+        rid = str(e.get("rule_id") or "unknown")
+        exceedance_stats[rid] = exceedance_stats.get(rid, 0) + 1
+
+    fuels = [s["fuel_percent"] for s in air_series if s.get("fuel_percent") is not None]
+    alts = [s["alt_ft"] for s in air_series if s.get("alt_ft") is not None]
+    xtes = [s["xte_nm"] for s in air_series if s.get("xte_nm") is not None]
+    alt_errs = [abs(s["alt_error_ft"]) for s in air_series if s.get("alt_error_ft") is not None]
+    spd_errs = [abs(s["spd_error_kts"]) for s in air_series if s.get("spd_error_kts") is not None]
+
+    metrics = {
+        "duration_min": duration_min,
+        "samples": len(air_series),
+        "max_alt_ft": max(alts) if alts else None,
+        "min_alt_ft": min(alts) if alts else None,
+        "fuel_start_pct": fuels[0] if fuels else None,
+        "fuel_end_pct": fuels[-1] if fuels else None,
+        "fuel_burn_pct": round(fuels[0] - fuels[-1], 1) if len(fuels) >= 2 else None,
+        "event_count": len(uniq),
+        "warn_count": sum(1 for e in uniq if e.get("severity") == "WARN"),
+        "mean_xte_nm": round(sum(xtes) / len(xtes), 3) if xtes else None,
+        "max_xte_nm": max(xtes) if xtes else None,
+        "mean_abs_alt_error_ft": round(sum(alt_errs) / len(alt_errs), 1) if alt_errs else None,
+        "mean_abs_spd_error_kts": round(sum(spd_errs) / len(spd_errs), 1) if spd_errs else None,
+        "exceedance_stats": exceedance_stats,
+    }
+
+    # Phase 4: aircraft health timeline
+    health_timeline: list[dict[str, Any]] = []
+    for s in air_series:
+        health_timeline.append(
+            {
+                "timestamp": s["timestamp"],
+                "datalink_up": s.get("datalink_up"),
+                "bus_ok": (s.get("bus_v") is None) or float(s["bus_v"]) >= 26.5,
+                "readiness": s.get("readiness"),
+                "gear": s.get("gear"),
+                "fuel_band": (
+                    "bingo"
+                    if s.get("fuel_percent") is not None and float(s["fuel_percent"]) < 60
+                    else "normal"
+                ),
+                "egt_ok": (s.get("egt_c") is None) or float(s["egt_c"]) <= 560,
+            }
+        )
+
+    try:
+        isr = sensor_isr_analysis(mission_id)
+        sensor_strip = {
+            "collections": len(isr.get("collections") or []),
+            "detections": len(isr.get("detections") or []),
+            "opportunities_unused": len(isr.get("opportunities") or []),
+            "sensor_uptime_pct": (isr.get("engineering") or {}).get("uptime_pct"),
+        }
+    except Exception:
+        sensor_strip = {}
+
+    return {
+        "mission_id": mission_id,
+        "air_series": air_series,
+        "events": uniq,
+        "metrics": metrics,
+        "sensor_strip": sensor_strip,
+        "health_timeline": health_timeline,
+        "planned_vs_actual": {
+            "available": bool(route),
+            "mean_xte_nm": metrics.get("mean_xte_nm"),
+            "max_xte_nm": metrics.get("max_xte_nm"),
+            "mean_abs_alt_error_ft": metrics.get("mean_abs_alt_error_ft"),
+            "mean_abs_spd_error_kts": metrics.get("mean_abs_spd_error_kts"),
+        },
+    }
+
+
+def fleet_trends_analysis() -> dict[str, Any]:
+    """Phase 6: multi-mission rollup across manifest (ponytail — demo may have one)."""
+    missions = load_manifest()
+    rows: list[dict[str, Any]] = []
+    for m in missions:
+        try:
+            fr = flight_review_analysis(m.mission_id)
+            isr = sensor_isr_analysis(m.mission_id)
+        except KeyError:
+            continue
+        met = fr.get("metrics") or {}
+        eng = isr.get("engineering") or {}
+        rows.append(
+            {
+                "mission_id": m.mission_id,
+                "name": m.name,
+                "duration_min": met.get("duration_min"),
+                "fuel_burn_pct": met.get("fuel_burn_pct"),
+                "warn_count": met.get("warn_count"),
+                "event_count": met.get("event_count"),
+                "mean_xte_nm": met.get("mean_xte_nm"),
+                "sensor_uptime_pct": eng.get("uptime_pct"),
+                "collections": len(isr.get("collections") or []),
+                "max_alt_ft": met.get("max_alt_ft"),
+            }
+        )
+    return {
+        "missions": rows,
+        "count": len(rows),
+        "aggregates": {
+            "mean_duration_min": round(
+                sum(r["duration_min"] or 0 for r in rows) / len(rows), 1
+            )
+            if rows
+            else None,
+            "mean_sensor_uptime_pct": round(
+                sum(r["sensor_uptime_pct"] or 0 for r in rows) / len(rows), 1
+            )
+            if rows
+            else None,
+            "total_warns": sum(r["warn_count"] or 0 for r in rows),
+            "total_collections": sum(r["collections"] or 0 for r in rows),
+        },
+    }
+
+
+def sensor_isr_analysis(mission_id: str) -> dict[str, Any]:
+    """EO/IR ISR geospatial + engineering/operator rollups for the ISR dashboard."""
+    _manifest_for(mission_id)
+    manifests = {m.mission_id: m for m in load_manifest()}
+    m = manifests[mission_id]
+    start = _parse_ts(m.start_time)
+    end = _parse_ts(m.end_time)
+    duration_s = max(1.0, (end - start).total_seconds())
+
+    track = track_samples(mission_id)
+    fov_history: list[dict[str, Any]] = []
+    for ev in list_events(mission_id, types=["sensorStatus"]):
+        p = ev.payload or {}
+        if p.get("fov_radius_m") is None and not p.get("observing"):
+            continue
+        pointing = p.get("pointing") or {}
+        fov_history.append(
+            {
+                "event_id": ev.event_id,
+                "timestamp": ev.timestamp,
+                "sensor": ev.sensor or p.get("sensor"),
+                "lat": ev.lat,
+                "lon": ev.lon,
+                "fov_radius_m": p.get("fov_radius_m"),
+                "for_radius_m": p.get("for_radius_m"),
+                "pointing": pointing,
+                "health": p.get("health") or ev.status,
+                "mode": p.get("mode"),
+                "sharpness": p.get("sharpness"),
+                "latency_ms": p.get("latency_ms"),
+                "stabilization_ok": p.get("stabilization_ok"),
+                "observing": bool(p.get("observing") or p.get("operational_status") == "collecting"),
+            }
+        )
+
+    collections: list[dict[str, Any]] = []
+    for ev in list_events(mission_id, types=["sensorCollect"]):
+        p = ev.payload or {}
+        collections.append(
+            {
+                "event_id": ev.event_id,
+                "timestamp": ev.timestamp,
+                "sensor": ev.sensor,
+                "target_id": ev.target_id,
+                "lat": ev.lat,
+                "lon": ev.lon,
+                "footprint_diameter_m": p.get("footprint_diameter_m"),
+                "fov_radius_m": p.get("fov_radius_m") or ((p.get("footprint_diameter_m") or 0) / 2),
+                "quality_score": p.get("quality_score"),
+                "sharpness": p.get("sharpness"),
+                "latency_ms": p.get("latency_ms"),
+                "pointing": p.get("pointing"),
+                "outcome": p.get("outcome") or ev.status,
+                "unplanned": bool(p.get("unplanned")),
+                "status": ev.status,
+            }
+        )
+
+    detections: list[dict[str, Any]] = []
+    opportunities: list[dict[str, Any]] = []
+    faults: list[dict[str, Any]] = []
+    for ev in list_events(mission_id, types=["other"]):
+        p = ev.payload or {}
+        kind = p.get("isr_kind")
+        base = {
+            "event_id": ev.event_id,
+            "timestamp": ev.timestamp,
+            "sensor": ev.sensor,
+            "target_id": ev.target_id,
+            "lat": ev.lat,
+            "lon": ev.lon,
+            "summary": ev.summary,
+            "status": ev.status,
+            **{k: p[k] for k in p if k != "isr_kind"},
+            "isr_kind": kind,
+        }
+        if kind == "detection":
+            detections.append(base)
+        elif kind == "opportunity":
+            opportunities.append(base)
+        elif kind == "fault":
+            faults.append(base)
+
+    # Engineering metrics
+    sensor_rows = list_events(mission_id, types=["sensorStatus"])
+    ok = sum(
+        1
+        for e in sensor_rows
+        if str((e.payload or {}).get("health") or e.status or "").upper() in {"OK", "GREEN"}
+    )
+    n_sen = len(sensor_rows) or 1
+    pointing_errors = [
+        float((e.payload or {}).get("pointing", {}).get("az_error_deg") or 0)
+        for e in sensor_rows
+        if (e.payload or {}).get("pointing")
+    ]
+    qualities = [float(c["quality_score"]) for c in collections if c.get("quality_score") is not None]
+    latencies = [float(c["latency_ms"]) for c in collections if c.get("latency_ms") is not None]
+    observing_samples = sum(1 for f in fov_history if f.get("observing"))
+    engineering = {
+        "uptime_pct": round(100 * ok / n_sen, 1),
+        "mean_az_error_deg": round(sum(pointing_errors) / len(pointing_errors), 3)
+        if pointing_errors
+        else 0.0,
+        "mean_quality": round(sum(qualities) / len(qualities), 3) if qualities else None,
+        "mean_latency_ms": round(sum(latencies) / len(latencies), 1) if latencies else None,
+        "fault_count": len(faults),
+        "confirmed_faults": sum(1 for f in faults if f.get("confirmed")),
+        "stabilization_ok_pct": round(
+            100
+            * sum(1 for e in sensor_rows if (e.payload or {}).get("stabilization_ok", True))
+            / n_sen,
+            1,
+        ),
+    }
+
+    imaged_det = sum(1 for d in detections if d.get("imaged"))
+    operator = {
+        "observe_pct": round(100 * observing_samples / max(1, len(fov_history)), 1)
+        if fov_history
+        else 0.0,
+        "mission_duration_min": round(duration_s / 60.0, 1),
+        "collections": len(collections),
+        "detections": len(detections),
+        "detection_to_image_pct": round(100 * imaged_det / max(1, len(detections)), 1),
+        "opportunities_unused": len(opportunities),
+        "unplanned_collects": sum(1 for c in collections if c.get("unplanned")),
+        "fov_samples": len(fov_history),
+    }
+    tgt_counts = Counter(c.get("target_id") for c in collections if c.get("target_id"))
+    operator["revisits"] = sum(1 for _, n in tgt_counts.items() if n and n > 1)
+
+    events: list[dict[str, Any]] = []
+    for c in collections:
+        events.append({**c, "isr_kind": "collection"})
+    for d in detections:
+        events.append({**d, "isr_kind": "detection"})
+    for o in opportunities:
+        events.append({**o, "isr_kind": "opportunity"})
+    for f in faults:
+        events.append({**f, "isr_kind": "fault"})
+    for f in fov_history:
+        events.append({**f, "isr_kind": "fov"})
+    events.sort(key=lambda e: e.get("timestamp") or "")
+
+    return {
+        "mission_id": mission_id,
+        "track": track,
+        "fov_history": fov_history,
+        "collections": collections,
+        "detections": detections,
+        "opportunities": opportunities,
+        "faults": faults,
+        "engineering": engineering,
+        "operator": operator,
+        "events": events,
+    }
+
+
+def platform_health_summary(mission_id: str) -> dict[str, Any]:
+    """Uptime-style rollup for PMR page 2."""
+    _manifest_for(mission_id)
+    sys_rows = list_events(mission_id, types=["systemStatus"])
+    sensor_rows = list_events(mission_id, types=["sensorStatus"])
+    if not sys_rows:
+        return {
+            "readiness_uptime_pct": 0,
+            "datalink_uptime_pct": 0,
+            "sensor_uptime_pct": 0,
+            "degradations": [],
+            "narrative": "No platform status samples.",
+        }
+    green = sum(1 for e in sys_rows if (e.status or "").upper() == "GREEN")
+    link_up = sum(1 for e in sys_rows if (e.payload or {}).get("datalink_up"))
+    sensor_ok = sum(
+        1
+        for e in sensor_rows
+        if str((e.payload or {}).get("health") or e.status or "").upper() in {"OK", "GREEN"}
+    )
+    degradations: list[str] = []
+    for e in sys_rows:
+        if not (e.payload or {}).get("datalink_up"):
+            degradations.append(f"Datalink drop at {e.timestamp}")
+            break
+    for e in sensor_rows:
+        h = str((e.payload or {}).get("health") or "").upper()
+        if h == "WARN":
+            degradations.append(f"{e.sensor or 'Sensor'} WARN at {e.timestamp}")
+            break
+    n_sys = len(sys_rows)
+    n_sen = len(sensor_rows) or 1
+    narrative = (
+        f"Platform maintained GREEN on {green}/{n_sys} status samples; "
+        f"datalink up {link_up}/{n_sys}; sensors OK/WARN on {sensor_ok}/{n_sen} telemetry points."
+    )
+    return {
+        "readiness_uptime_pct": round(100 * green / n_sys, 1),
+        "datalink_uptime_pct": round(100 * link_up / n_sys, 1),
+        "sensor_uptime_pct": round(100 * sensor_ok / n_sen, 1),
+        "degradations": degradations,
+        "narrative": narrative,
+    }

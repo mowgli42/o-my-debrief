@@ -6,10 +6,12 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from omy_debrief import __version__
 from omy_debrief import store
+from omy_debrief.report_flight import build_flight_performance_html
+from omy_debrief.report_pmr import build_pmr_html
 from omy_debrief.models.events import (
     CompareResult,
     DebriefEvent,
@@ -117,6 +119,73 @@ def summary(mission: str = Query(...)) -> dict[str, Any]:
         return store.mission_summary(mission)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/analysis/sensor-collects")
+def analysis_sensor_collects(mission: str = Query(...)) -> dict[str, Any]:
+    try:
+        return store.sensor_collect_analysis(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/analysis/sensor-telemetry")
+def analysis_sensor_telemetry(mission: str = Query(...)) -> dict[str, Any]:
+    try:
+        return store.sensor_telemetry_series(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/analysis/weapons-lar")
+def analysis_weapons_lar(mission: str = Query(...)) -> dict[str, Any]:
+    try:
+        return store.weapons_lar_analysis(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/analysis/sensor-isr")
+def analysis_sensor_isr(mission: str = Query(...)) -> dict[str, Any]:
+    """EO/IR ISR FOV, collections, detections, eng/ops rollups."""
+    try:
+        return store.sensor_isr_analysis(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/analysis/flight-review")
+def analysis_flight_review(mission: str = Query(...)) -> dict[str, Any]:
+    """FOQA-style air series + threshold events for Flight Review."""
+    try:
+        return store.flight_review_analysis(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/analysis/fleet-trends")
+def analysis_fleet_trends() -> dict[str, Any]:
+    """Multi-mission FOQA / sensor rollups across the manifest."""
+    return store.fleet_trends_analysis()
+
+
+@app.get("/api/report/pmr", response_class=HTMLResponse)
+def report_pmr(mission: str = Query(...)) -> HTMLResponse:
+    try:
+        body = build_pmr_html(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return HTMLResponse(content=body)
+
+
+@app.get("/api/report/flight-performance", response_class=HTMLResponse)
+def report_flight_performance(mission: str = Query(...)) -> HTMLResponse:
+    """Five-section Aircraft Flight Performance Report (print → PDF)."""
+    try:
+        body = build_flight_performance_html(mission)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return HTMLResponse(content=body)
 
 
 @app.get("/api/milestone-rules")
